@@ -14,8 +14,10 @@ in the field of computer vision
 the dominant architecture
 had been based on
 CNNs (:numref:`chap_modern_cnn`).
-*Can we apply transformers
+*Can we adapt transformers
 to model image data*?
+This question has sparked immense interest
+in the computer vision community.
 :cite:`ramachandran2019stand` proposed to replace convolution with self-attention. 
 However, its use of specialized patterns in attention makes it hard to scale up models on hardware accelerators.
 :cite:`cordonnier2020relationship` theoretically proved that self-attention can learn to behave similarly to convolution. Empirically, $2 \times 2$ patches were taken from images as input, but the small patch size makes the model only applicable to image data with low resolutions.
@@ -216,16 +218,16 @@ trainer.fit(model, data)
 ## Summary and Discussion
 
 You may notice that for small datasets like Fashion-MNIST, our implemented vision transformer does not outperform the ResNet in :numref:`sec_resnet`.
-Similar observations can be made even on ImageNet-scale datasets.
+Similar observations can be made even on the ImageNet dataset (1.2 million images).
 This is because transformers *lack* those useful principles in convolution, such as translation invariance and locality (:numref:`sec_why-conv`).
-However, the picture changes when training larger models on larger datasets (e.g., 14M--300M images),
+However, the picture changes when training larger models on larger datasets (e.g., 300 million images),
 where vision transformers outperform ResNets by a large margin in image classification, demonstrating
 intrinsic superiority of transformers in scalability :cite:`Dosovitskiy.Beyer.Kolesnikov.ea.2021`.
 The introduction of vision transformers
 has changed the landscape of network design for modeling image data.
 They were soon shown effective on the ImageNet dataset with data-efficient training strategies of DeiT :cite:`touvron2021training`.
 Towards a general-purpose backbone network in computer vision,
-Swin Transformers addressed the quadratic computational complexity with respect to image size (:numref:`subsec_cnn-rnn-self-attention`)
+Swin transformers addressed the quadratic computational complexity with respect to image size (:numref:`subsec_cnn-rnn-self-attention`)
 and added back convolution-like priors,
 extending the applicability of transformers to a range of computer vision tasks beyond image classification with state-of-the-art results :cite:`liu2021swin`.
 
