@@ -329,6 +329,7 @@ convolutional neural networks.
 
 
 ## [**The Sequential Module**]
+:label:`subsec_model-construction-sequential`
 
 We can now take a closer look
 at how the `Sequential` class works.
@@ -336,8 +337,9 @@ Recall that `Sequential` was designed
 to daisy-chain other modules together.
 To build our own simplified `MySequential`,
 we just need to define two key methods:
+
 1. A method to append modules one by one to a list.
-2. A forward propagation method to pass an input through the chain of modules, in the same order as they were appended.
+1. A forward propagation method to pass an input through the chain of modules, in the same order as they were appended.
 
 The following `MySequential` class delivers the same
 functionality of the default `Sequential` class.
@@ -641,12 +643,13 @@ chimera(X)
 
 ## Summary
 
-* Layers are modules.
-* Many layers can comprise a module.
-* Many modules can comprise a module.
-* A module can contain code.
-* Modules take care of lots of housekeeping, including parameter initialization and backpropagation.
-* Sequential concatenations of layers and modules are handled by the `Sequential` module.
+Layers are modules.
+Many layers can comprise a module.
+Many modules can comprise a module.
+
+A module can contain code.
+Modules take care of lots of housekeeping, including parameter initialization and backpropagation.
+Sequential concatenations of layers and modules are handled by the `Sequential` module.
 
 
 ## Exercises
