@@ -1,3 +1,8 @@
+```{.python .input}
+%load_ext d2lbook.tab
+tab.interact_select(['mxnet', 'pytorch', 'tensorflow', 'jax'])
+```
+
 # Lazy Initialization
 :label:`sec_lazy_init`
 
@@ -36,23 +41,11 @@ can greatly simplify the task of specifying
 and subsequently modifying our models.
 Next, we go deeper into the mechanics of initialization.
 
-
-To begin, let's instantiate an MLP.
-
-```{.python .input}
-%load_ext d2lbook.tab
-tab.interact_select(['mxnet', 'pytorch', 'tensorflow'])
-```
-
 ```{.python .input}
 %%tab mxnet
 from mxnet import np, npx
 from mxnet.gluon import nn
 npx.set_np()
-
-net = nn.Sequential()
-net.add(nn.Dense(256, activation='relu'))
-net.add(nn.Dense(10))
 ```
 
 ```{.python .input}
@@ -60,25 +53,62 @@ net.add(nn.Dense(10))
 from d2l import torch as d2l
 import torch
 from torch import nn
-
-net = nn.Sequential(nn.LazyLinear(256), nn.ReLU(), nn.LazyLinear(10))
 ```
 
 ```{.python .input}
 %%tab tensorflow
 import tensorflow as tf
+```
 
+```{.python .input}
+%%tab jax
+from d2l import jax as d2l
+from flax import linen as nn
+import jax
+from jax import numpy as jnp
+```
+
+To begin, let's instantiate an MLP.
+
+```{.python .input}
+%%tab mxnet
+net = nn.Sequential()
+net.add(nn.Dense(256, activation='relu'))
+net.add(nn.Dense(10))
+```
+
+```{.python .input}
+%%tab pytorch
+net = nn.Sequential(nn.LazyLinear(256), nn.ReLU(), nn.LazyLinear(10))
+```
+
+```{.python .input}
+%%tab tensorflow
 net = tf.keras.models.Sequential([
     tf.keras.layers.Dense(256, activation=tf.nn.relu),
     tf.keras.layers.Dense(10),
 ])
 ```
 
+```{.python .input}
+%%tab jax
+net = nn.Sequential([nn.Dense(256), nn.relu, nn.Dense(10)])
+```
+
 At this point, the network cannot possibly know
 the dimensions of the input layer's weights
 because the input dimension remains unknown.
+
+:begin_tab:`mxnet, pytorch, tensorflow`
 Consequently the framework has not yet initialized any parameters.
 We confirm by attempting to access the parameters below.
+:end_tab:
+
+:begin_tab:`jax`
+As mentioned in :numref:`subsec_param-access`, parameters and the network definition are decoupled
+in Jax and Flax, and the user handles both manually. Flax models are stateless
+hence there is no `parameters` attribute.
+:end_tab:
 
 ```{.python .input}
 %%tab mxnet
@@ -155,6 +185,12 @@ net(X)
 [w.shape for w in net.get_weights()]
 ```
 
+```{.python .input}
+%%tab jax
+params = net.init(d2l.get_key(), jnp.zeros((2, 20)))
+jax.tree_util.tree_map(lambda x: x.shape, params).tree_flatten()
+```
+
 As soon as we know the input dimensionality,
 20,
 the framework can identify the shape of the first layer's weight matrix by plugging in the value of 20.
@@ -178,6 +214,16 @@ and subsequently initializes the parameters.
 It will be used later when default random initializations are not desired.
 :end_tab:
 
+:begin_tab:`jax`
+Parameter initialization in Flax is always done manually and handled by the
+user. The following method takes a dummy input and a key dictionary as argument.
+This key dictionary has the rngs for initializing the model parameters
+and dropout rng for generating the dropout mask for the models with
+dropout layers. More about dropout will be covered later in :numref:`sec_dropout`.
+Ultimately the method initializes the model returning the parameters.
+We have been using it under the hood in the previous sections as well.
+:end_tab:
+
 ```{.python .input}
 %%tab pytorch
 @d2l.add_to_class(d2l.Module)  #@save
@@ -185,6 +231,14 @@ def apply_init(self, inputs, init=None):
     self.forward(*inputs)
     if init is not None:
         self.net.apply(init)
+```
+
+```{.python .input}
+%%tab jax
+@d2l.add_to_class(d2l.Module)  #@save
+def apply_init(self, dummy_input, key):
+    params = self.init(key, *dummy_input)  # dummy_input tuple unpacked
+    return params
 ```
 
 ## Summary

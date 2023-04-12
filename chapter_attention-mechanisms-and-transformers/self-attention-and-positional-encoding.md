@@ -1,6 +1,6 @@
 ```{.python .input}
 %load_ext d2lbook.tab
-tab.interact_select('mxnet', 'pytorch', 'tensorflow')
+tab.interact_select('mxnet', 'pytorch', 'tensorflow', 'jax')
 ```
 
 # Self-Attention and Positional Encoding
@@ -50,6 +50,14 @@ import numpy as np
 import tensorflow as tf
 ```
 
+```{.python .input}
+%%tab jax
+from d2l import jax as d2l
+from flax import linen as nn
+from jax import numpy as jnp
+import jax
+```
+
 ## [**Self-Attention**]
 
 Given a sequence of input tokens
@@ -61,13 +69,23 @@ where
 
 $$\mathbf{y}_i = f(\mathbf{x}_i, (\mathbf{x}_1, \mathbf{x}_1), \ldots, (\mathbf{x}_n, \mathbf{x}_n)) \in \mathbb{R}^d$$
 
-according to the definition of attention pooling $f$ in
-:eqref:`eq_attn-pooling-def`.
+according to the definition of attention pooling in
+:eqref:`eq_attention_pooling`.
 Using multi-head attention,
 the following code snippet
 computes the self-attention of a tensor
 with shape (batch size, number of time steps or sequence length in tokens, $d$).
 The output tensor has the same shape.
+
+```{.python .input}
+%%tab pytorch
+num_hiddens, num_heads = 100, 5
+attention = d2l.MultiHeadAttention(num_hiddens, num_heads, 0.5)
+batch_size, num_queries, valid_lens = 2, 4, d2l.tensor([3, 2])
+X = d2l.ones((batch_size, num_queries, num_hiddens))
+d2l.check_shape(attention(X, X, X, valid_lens),
+                (batch_size, num_queries, num_hiddens))
+```
 
 ```{.python .input}
 %%tab mxnet
@@ -77,7 +95,7 @@ attention.initialize()
 ```
 
 ```{.python .input}
-%%tab pytorch
+%%tab jax
 num_hiddens, num_heads = 100, 5
 attention = d2l.MultiHeadAttention(num_hiddens, num_heads, 0.5)
 ```
@@ -90,7 +108,7 @@ attention = d2l.MultiHeadAttention(num_hiddens, num_hiddens, num_hiddens,
 ```
 
 ```{.python .input}
-%%tab mxnet, pytorch
+%%tab mxnet
 batch_size, num_queries, valid_lens = 2, 4, d2l.tensor([3, 2])
 X = d2l.ones((batch_size, num_queries, num_hiddens))
 d2l.check_shape(attention(X, X, X, valid_lens),
@@ -102,6 +120,15 @@ d2l.check_shape(attention(X, X, X, valid_lens),
 batch_size, num_queries, valid_lens = 2, 4, tf.constant([3, 2])
 X = tf.ones((batch_size, num_queries, num_hiddens))
 d2l.check_shape(attention(X, X, X, valid_lens, training=False),
+                (batch_size, num_queries, num_hiddens))
+```
+
+```{.python .input}
+%%tab jax
+batch_size, num_queries, valid_lens = 2, 4, d2l.tensor([3, 2])
+X = d2l.ones((batch_size, num_queries, num_hiddens))
+d2l.check_shape(attention.init_with_output(d2l.get_key(), X, X, X, valid_lens,
+                                           training=False)[0][0],
                 (batch_size, num_queries, num_hiddens))
 ```
 
@@ -234,8 +261,7 @@ let's first implement it in the following `PositionalEncoding` class.
 
 ```{.python .input}
 %%tab mxnet
-#@save
-class PositionalEncoding(nn.Block):
+class PositionalEncoding(nn.Block):  #@save
     """Positional encoding."""
     def __init__(self, num_hiddens, dropout, max_len=1000):
         super().__init__()
@@ -254,8 +280,7 @@ class PositionalEncoding(nn.Block):
 
 ```{.python .input}
 %%tab pytorch
-#@save
-class PositionalEncoding(nn.Module):
+class PositionalEncoding(nn.Module):  #@save
     """Positional encoding."""
     def __init__(self, num_hiddens, dropout, max_len=1000):
         super().__init__()
@@ -275,8 +300,7 @@ class PositionalEncoding(nn.Module):
 
 ```{.python .input}
 %%tab tensorflow
-#@save
-class PositionalEncoding(tf.keras.layers.Layer):
+class PositionalEncoding(tf.keras.layers.Layer):  #@save
     """Positional encoding."""
     def __init__(self, num_hiddens, dropout, max_len=1000):
         super().__init__()
@@ -292,6 +316,31 @@ class PositionalEncoding(tf.keras.layers.Layer):
     def call(self, X, **kwargs):
         X = X + self.P[:, :X.shape[1], :]
         return self.dropout(X, **kwargs)
+```
+
+```{.python .input}
+%%tab jax
+class PositionalEncoding(nn.Module):  #@save
+    """Positional encoding."""
+    num_hiddens: int
+    dropout: float
+    max_len: int = 1000
+
+    def setup(self):
+        # Create a long enough P
+        self.P = d2l.zeros((1, self.max_len, self.num_hiddens))
+        X = d2l.arange(self.max_len, dtype=jnp.float32).reshape(
+            -1, 1) / jnp.power(10000, jnp.arange(
+            0, self.num_hiddens, 2, dtype=jnp.float32) / self.num_hiddens)
+        self.P = self.P.at[:, :, 0::2].set(jnp.sin(X))
+        self.P = self.P.at[:, :, 1::2].set(jnp.cos(X))
+
+    @nn.compact
+    def __call__(self, X, training=False):
+        # Flax sow API is used to capture intermediate variables
+        self.sow('intermediates', 'P', self.P)
+        X = X + self.P[:, :X.shape[1], :]
+        return nn.Dropout(self.dropout)(X, deterministic=not training)
 ```
 
 In the positional embedding matrix $\mathbf{P}$,
@@ -339,6 +388,19 @@ d2l.plot(np.arange(num_steps), P[0, :, 6:10].T, xlabel='Row (position)',
          figsize=(6, 2.5), legend=["Col %d" % d for d in np.arange(6, 10)])
 ```
 
+```{.python .input}
+%%tab jax
+encoding_dim, num_steps = 32, 60
+pos_encoding = PositionalEncoding(encoding_dim, 0)
+params = pos_encoding.init(d2l.get_key(), d2l.zeros((1, num_steps, encoding_dim)))
+X, inter_vars = pos_encoding.apply(params, d2l.zeros((1, num_steps, encoding_dim)),
+                                   mutable='intermediates')
+P = inter_vars['intermediates']['P'][0]  # retrieve intermediate value P
+P = P[:, :X.shape[1], :]
+d2l.plot(d2l.arange(num_steps), P[0, :, 6:10].T, xlabel='Row (position)',
+         figsize=(6, 2.5), legend=["Col %d" % d for d in d2l.arange(6, 10)])
+```
+
 ### Absolute Positional Information
 
 To see how the monotonically decreased frequency
@@ -382,6 +444,13 @@ d2l.show_heatmaps(P, xlabel='Column (encoding dimension)',
 ```{.python .input}
 %%tab tensorflow
 P = tf.expand_dims(tf.expand_dims(P[0, :, :], axis=0), axis=0)
+d2l.show_heatmaps(P, xlabel='Column (encoding dimension)',
+                  ylabel='Row (position)', figsize=(3.5, 4), cmap='Blues')
+```
+
+```{.python .input}
+%%tab jax
+P = jnp.expand_dims(jnp.expand_dims(P[0, :, :], axis=0), axis=0)
 d2l.show_heatmaps(P, xlabel='Column (encoding dimension)',
                   ylabel='Row (position)', figsize=(3.5, 4), cmap='Blues')
 ```
@@ -432,7 +501,6 @@ for very long sequences.
 To use the sequence order information, 
 we can inject absolute or relative positional information 
 by adding positional encoding to the input representations.
-
 
 ## Exercises
 

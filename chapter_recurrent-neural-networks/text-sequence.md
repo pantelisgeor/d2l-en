@@ -18,7 +18,7 @@ execute the following steps:
 
 ```{.python .input  n=1}
 %load_ext d2lbook.tab
-tab.interact_select(['mxnet', 'pytorch', 'tensorflow'])
+tab.interact_select(['mxnet', 'pytorch', 'tensorflow', 'jax'])
 ```
 
 ```{.python .input  n=2}
@@ -49,6 +49,16 @@ import tensorflow as tf
 import random
 ```
 
+```{.python .input}
+%%tab jax
+import collections
+from d2l import jax as d2l
+import jax
+from jax import numpy as jnp
+import random
+import re
+```
+
 ## Reading the Dataset
 
 Here, we will work with H. G. Wells'
@@ -64,6 +74,7 @@ The following `_download` method
 ```{.python .input  n=5}
 %%tab all
 class TimeMachine(d2l.DataModule): #@save
+    """The Time Machine dataset."""
     def _download(self):
         fname = d2l.download(d2l.DATA_URL + 'timemachine.txt', self.root,
                              '090b5e7e70c295757f55df93cb0a180b9691891a')
@@ -294,7 +305,7 @@ One thing is notable here. Out of the ten most frequent word pairs, nine are com
 %%tab all
 trigram_tokens = ['--'.join(triple) for triple in zip(
     words[:-2], words[1:-1], words[2:])]
-trigram_vocab = d2l.Vocab(trigram_tokens)
+trigram_vocab = Vocab(trigram_tokens)
 trigram_vocab.token_freqs[:10]
 ```
 

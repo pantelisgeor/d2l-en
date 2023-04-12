@@ -1,6 +1,6 @@
 ```{.python .input}
 %load_ext d2lbook.tab
-tab.interact_select(['mxnet', 'pytorch', 'tensorflow'])
+tab.interact_select(['mxnet', 'pytorch', 'tensorflow', 'jax'])
 ```
 
 # GPUs
@@ -89,6 +89,37 @@ Almost all other sections do *not* require multiple GPUs.
 Instead, this is simply to illustrate
 how data flow between different devices.
 
+
+
+```{.python .input}
+%%tab mxnet
+from d2l import mxnet as d2l
+from mxnet import np, npx
+from mxnet.gluon import nn
+npx.set_np()
+```
+
+```{.python .input}
+%%tab pytorch
+from d2l import torch as d2l
+import torch
+from torch import nn
+```
+
+```{.python .input}
+%%tab tensorflow
+from d2l import tensorflow as d2l
+import tensorflow as tf
+```
+
+```{.python .input}
+%%tab jax
+from d2l import jax as d2l
+from flax import linen as nn
+import jax
+from jax import numpy as jnp
+```
+
 ## [**Computing Devices**]
 
 We can specify devices, such as CPUs and GPUs,
@@ -124,43 +155,37 @@ Also, `gpu:0` and `gpu` are equivalent.
 :end_tab:
 
 ```{.python .input}
-%%tab mxnet
-from d2l import mxnet as d2l
-from mxnet import np, npx
-from mxnet.gluon import nn
-npx.set_np()
-```
-
-```{.python .input}
 %%tab pytorch
-from d2l import torch as d2l
-import torch
-from torch import nn
-```
-
-```{.python .input}
-%%tab tensorflow
-from d2l import tensorflow as d2l
-import tensorflow as tf
-```
-
-```{.python .input}
-%%tab all
 def cpu():  #@save
-    if tab.selected('mxnet'):
-        return npx.cpu()
-    if tab.selected('pytorch'):
-        return torch.device('cpu')
-    if tab.selected('tensorflow'):
-        return tf.device('/CPU:0')
+    """Get the CPU device."""
+    return torch.device('cpu')
 
 def gpu(i=0):  #@save
+    """Get a GPU device."""
+    return torch.device(f'cuda:{i}')
+
+cpu(), gpu(), gpu(1)
+```
+
+```{.python .input}
+%%tab mxnet, tensorflow, jax
+def cpu():  #@save
+    """Get the CPU device."""
+    if tab.selected('mxnet'):
+        return npx.cpu()
+    if tab.selected('tensorflow'):
+        return tf.device('/CPU:0')
+    if tab.selected('jax'):
+        return jax.devices('cpu')[0]
+
+def gpu(i=0):  #@save
+    """Get a GPU device."""
     if tab.selected('mxnet'):
         return npx.gpu(i)
-    if tab.selected('pytorch'):
-        return torch.device(f'cuda:{i}')
     if tab.selected('tensorflow'):
         return tf.device(f'/GPU:{i}')
+    if tab.selected('jax'):
+        return jax.devices('gpu')[i]
 
 cpu(), gpu(), gpu(1)
 ```
@@ -168,14 +193,27 @@ cpu(), gpu(), gpu(1)
 We can (**query the number of available GPUs.**)
 
 ```{.python .input}
-%%tab all
+%%tab pytorch
 def num_gpus():  #@save
+    """Get the number of available GPUs."""
+    return torch.cuda.device_count()
+
+num_gpus()
+```
+
+```{.python .input}
+%%tab mxnet, tensorflow, jax
+def num_gpus():  #@save
+    """Get the number of available GPUs."""
     if tab.selected('mxnet'):
         return npx.num_gpus()
-    if tab.selected('pytorch'):
-        return torch.cuda.device_count()
     if tab.selected('tensorflow'):
         return len(tf.config.experimental.list_physical_devices('GPU'))
+    if tab.selected('jax'):
+        try:
+            return jax.device_count('gpu')
+        except:
+            return 0  # No GPU backend found
 
 num_gpus()
 ```
@@ -200,8 +238,26 @@ try_gpu(), try_gpu(10), try_all_gpus()
 
 ## Tensors and GPUs
 
+:begin_tab:`pytorch`
 By default, tensors are created on the CPU.
 We can [**query the device where the tensor is located.**]
+:end_tab:
+
+:begin_tab:`mxnet`
+By default, tensors are created on the CPU.
+We can [**query the device where the tensor is located.**]
+:end_tab:
+
+:begin_tab:`tensorflow`
+By default, tensors are created on the CPU.
+We can [**query the device where the tensor is located.**]
+:end_tab:
+
+:begin_tab:`jax`
+By default, tensors are created on the GPU/TPU if they are available,
+else CPU is used if not available.
+We can [**query the device where the tensor is located.**]
+:end_tab:
 
 ```{.python .input}
 %%tab mxnet
@@ -219,6 +275,12 @@ x.device
 %%tab tensorflow
 x = tf.constant([1, 2, 3])
 x.device
+```
+
+```{.python .input}
+%%tab jax
+x = jnp.array([1, 2, 3])
+x.device()
 ```
 
 It is important to note that whenever we want
@@ -258,6 +320,13 @@ with try_gpu():
 X
 ```
 
+```{.python .input}
+%%tab jax
+# By default JAX puts arrays to GPUs or TPUs if available
+X = jax.device_put(jnp.ones((2, 3)), try_gpu())
+X
+```
+
 Assuming that you have at least two GPUs, the following code will (**create a random tensor on the second GPU.**)
 
 ```{.python .input}
@@ -276,6 +345,13 @@ Y
 %%tab tensorflow
 with try_gpu(1):
     Y = tf.random.uniform((2, 3))
+Y
+```
+
+```{.python .input}
+%%tab jax
+Y = jax.device_put(jax.random.uniform(jax.random.PRNGKey(0), (2, 3)),
+                   try_gpu(1))
 Y
 ```
 
@@ -318,6 +394,13 @@ print(X)
 print(Z)
 ```
 
+```{.python .input}
+%%tab jax
+Z = jax.device_put(X, try_gpu(1))
+print(X)
+print(Z)
+```
+
 Now that [**the data is on the same GPU
 (both `Z` and `Y` are),
 we can add them up.**]
@@ -355,6 +438,12 @@ What happens if we still call `Z2 = Z` under the same device scope?
 It will return `Z` instead of making a copy and allocating new memory.
 :end_tab:
 
+:begin_tab:`jax`
+Imagine that your variable `Z` already lives on your second GPU.
+What happens if we still call `Z2 = Z` under the same device scope?
+It will return `Z` instead of making a copy and allocating new memory.
+:end_tab:
+
 ```{.python .input}
 %%tab mxnet
 Z.as_in_ctx(try_gpu(1)) is Z
@@ -369,6 +458,12 @@ Z.cuda(1) is Z
 %%tab tensorflow
 with try_gpu(1):
     Z2 = Z
+Z2 is Z
+```
+
+```{.python .input}
+%%tab jax
+Z2 = jax.device_put(Z, try_gpu(1))
 Z2 is Z
 ```
 
@@ -434,6 +529,15 @@ with strategy.scope():
         tf.keras.layers.Dense(1)])
 ```
 
+```{.python .input}
+%%tab jax
+net = nn.Sequential([nn.Dense(1)])
+
+key1, key2 = jax.random.split(jax.random.PRNGKey(0))
+x = jax.random.normal(key1, (10,))  # Dummy input
+params = net.init(key2, x)  # Initialization call
+```
+
 We will see many more examples of
 how to run models on GPUs in the following chapters,
 simply since they will become somewhat more computationally intensive.
@@ -441,8 +545,13 @@ simply since they will become somewhat more computationally intensive.
 When the input is a tensor on the GPU, the model will calculate the result on the same GPU.
 
 ```{.python .input}
-%%tab all
+%%tab mxnet, pytorch, tensorflow
 net(X)
+```
+
+```{.python .input}
+%%tab jax
+net.apply(params, x)
 ```
 
 Let's (**confirm that the model parameters are stored on the same GPU.**)
@@ -460,6 +569,11 @@ net[0].weight.data.device
 ```{.python .input}
 %%tab tensorflow
 net.layers[0].weights[0].device, net.layers[0].weights[1].device
+```
+
+```{.python .input}
+%%tab jax
+print(jax.tree_util.tree_map(lambda x: x.device(), params))
 ```
 
 Let the trainer support GPU.
@@ -505,6 +619,20 @@ def prepare_model(self, model):
         if tab.selected('pytorch'):
             model.to(self.gpus[0])
     self.model = model
+```
+
+```{.python .input}
+%%tab jax
+@d2l.add_to_class(d2l.Trainer)  #@save
+def __init__(self, max_epochs, num_gpus=0, gradient_clip_val=0):
+    self.save_hyperparameters()
+    self.gpus = [d2l.gpu(i) for i in range(min(num_gpus, d2l.num_gpus()))]
+
+@d2l.add_to_class(d2l.Trainer)  #@save
+def prepare_batch(self, batch):
+    if self.gpus:
+        batch = [d2l.to(a, self.gpus[0]) for a in batch]
+    return batch
 ```
 
 In short, as long as all data and parameters are on the same device, we can learn models efficiently. In the following chapters we will see several such examples.

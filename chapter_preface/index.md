@@ -2,7 +2,7 @@
 
 Just a few years ago, there were no legions of deep learning scientists
 developing intelligent products and services at major companies and startups.
-When we entered the field, machine learning 
+When we entered the field, machine learning
 did not command headlines in daily newspapers.
 Our parents had no idea what machine learning was,
 let alone why we might prefer it to a career in medicine or law.
@@ -12,29 +12,28 @@ to a narrow set of real-world applications,
 including speech recognition and computer vision.
 Moreover, many of these applications
 required so much domain knowledge
-that they were often regarded as entirely separate areas 
+that they were often regarded as entirely separate areas
 for which machine learning was one small component.
-At that time, neural networks---the 
+At that time, neural networks---the
 predecessors of the deep learning methods
-that we focus on in this book---were 
+that we focus on in this book---were
 generally regarded as outmoded.
 
 
 In just the past few years, deep learning has taken the world by surprise,
-driving rapid progress in such diverse fields 
-as computer vision, natural language processing, 
-automatic speech recognition, reinforcement learning, 
+driving rapid progress in such diverse fields
+as computer vision, natural language processing,
+automatic speech recognition, reinforcement learning,
 and biomedical informatics.
 Moreover, the success of deep learning
 on so many tasks of practical interest
-has even catalyzed developments 
+has even catalyzed developments
 in theoretical machine learning and statistics.
-With these advances in hand, 
+With these advances in hand,
 we can now build cars that drive themselves
-with more autonomy than ever before 
+with more autonomy than ever before
 (and less autonomy than some companies might have you believe),
-smart reply systems that automatically draft the most mundane emails,
-helping people dig out from oppressively large inboxes,
+dialogue systems that debug code by asking clarifying questions,
 and software agents that dominate the world's best humans
 at board games like Go, a feat once thought to be decades away.
 Already, these tools exert ever-wider impacts on industry and society,
@@ -54,7 +53,7 @@ For any computing technology to reach its full impact,
 it must be well-understood, well-documented, and supported by
 mature, well-maintained tools.
 The key ideas should be clearly distilled,
-minimizing the onboarding time needing 
+minimizing the onboarding time needing
 to bring new practitioners up to date.
 Mature libraries should automate common tasks,
 and exemplar code should make it easy for practitioners
@@ -73,19 +72,19 @@ Applying deep learning requires simultaneously understanding
 (i) the motivations for casting a problem in a particular way;
 (ii) the mathematical form of a given model;
 (iii) the optimization algorithms for fitting the models to data;
-(iv) the statistical principles that tell us 
-when we should expect our models 
+(iv) the statistical principles that tell us
+when we should expect our models
 to generalize to unseen data
-and practical methods for certifying 
+and practical methods for certifying
 that they have, in fact, generalized;
 and (v) the engineering techniques
 required to train models efficiently,
 navigating the pitfalls of numerical computing
 and getting the most out of available hardware.
-Teaching both the critical thinking skills 
+Teaching both the critical thinking skills
 required to formulate problems,
 the mathematics to solve them,
-and the software tools to implement those solutions 
+and the software tools to implement those solutions
 all in one place presents formidable challenges.
 Our goal in this book is to present a unified resource
 to bring would-be practitioners up to speed.
@@ -107,41 +106,41 @@ or for implementing particular techniques
 scattered across various blog posts and GitHub repositories.
 However, these examples typically focused on
 *how* to implement a given approach,
-but left out the discussion of 
+but left out the discussion of
 *why* certain algorithmic decisions are made.
-While some interactive resources 
+While some interactive resources
 have popped up sporadically
-to address a particular topic, 
+to address a particular topic,
 e.g., the engaging blog posts
 published on the website [Distill](http://distill.pub), or personal blogs,
 they only covered selected topics in deep learning,
 and often lacked associated code.
-On the other hand, while several deep learning textbooks 
-have emerged---e.g., :cite:`Goodfellow.Bengio.Courville.2016`, 
-which offers a comprehensive survey 
-on the basics of deep learning---these 
+On the other hand, while several deep learning textbooks
+have emerged---e.g., :citet:`Goodfellow.Bengio.Courville.2016`,
+which offers a comprehensive survey
+on the basics of deep learning---these
 resources do not marry the descriptions
 to realizations of the concepts in code,
-sometimes leaving readers clueless 
+sometimes leaving readers clueless
 as to how to implement them.
-Moreover, too many resources 
+Moreover, too many resources
 are hidden behind the paywalls
 of commercial course providers.
 
 We set out to create a resource that could
 (i) be freely available for everyone;
-(ii) offer sufficient technical depth 
+(ii) offer sufficient technical depth
 to provide a starting point on the path
 to actually becoming an applied machine learning scientist;
 (iii) include runnable code, showing readers
 *how* to solve problems in practice;
 (iv) allow for rapid updates, both by us
 and also by the community at large;
-and (v) be complemented by a [forum](http://discuss.d2l.ai)
+and (v) be complemented by a [forum](https://discuss.d2l.ai/c/5)
 for interactive discussion of technical details and to answer questions.
 
 These goals were often in conflict.
-Equations, theorems, and citations 
+Equations, theorems, and citations
 are best managed and laid out in LaTeX.
 Code is best described in Python.
 And webpages are native in HTML and JavaScript.
@@ -165,16 +164,16 @@ using such an integrated workflow.
 
 ### Learning by Doing
 
-Many textbooks present concepts in succession, 
+Many textbooks present concepts in succession,
 covering each in exhaustive detail.
 For example, Chris Bishop's excellent textbook :cite:`Bishop.2006`,
 teaches each topic so thoroughly
 that getting to the chapter
-on linear regression requires 
+on linear regression requires
 a non-trivial amount of work.
-While experts love this book 
+While experts love this book
 precisely for its thoroughness,
-for true beginners, this property limits 
+for true beginners, this property limits
 its usefulness as an introductory text.
 
 In this book, we teach most concepts *just in time*.
@@ -191,7 +190,7 @@ each subsequent chapter introduces both a reasonable number of new concepts
 and provides several self-contained working examples, using real datasets.
 This presented an organizational challenge.
 Some models might logically be grouped together in a single notebook.
-And some ideas might be best taught 
+And some ideas might be best taught
 by executing several models in succession.
 On the other hand, there is a big advantage to adhering
 to a policy of *one working example, one notebook*:
@@ -244,16 +243,16 @@ and applications (:numref:`fig_book_org`).
 :label:`fig_book_org`
 
 
-* **Part 1: Basics and Preliminaries.**
+* **Part 1: Basics and Preliminaries**.
 :numref:`chap_introduction` offers 
 an introduction to deep learning.
 Then, in :numref:`chap_preliminaries`,
-we quickly bring you up to speed 
+we quickly bring you up to speed
 on the prerequisites required
-for hands-on deep learning, 
+for hands-on deep learning,
 such as how to store and manipulate data,
-and how to apply various numerical operations 
-based on basic concepts from linear algebra, 
+and how to apply various numerical operations
+based on basic concepts from linear algebra,
 calculus, and probability.
 :numref:`chap_regression` and :numref:`chap_perceptrons`
 cover the most basic concepts and techniques in deep learning,
@@ -261,7 +260,7 @@ including regression and classification;
 linear models; multilayer perceptrons;
 and overfitting and regularization.
 
-* **Part 2: Modern Deep Learning Techniques.**
+* **Part 2: Modern Deep Learning Techniques**.
 :numref:`chap_computation` describes
 the key computational components
 of deep learning systems
@@ -273,35 +272,34 @@ introduce convolutional neural networks (CNNs),
 powerful tools that form the backbone 
 of most modern computer vision systems.
 Similarly, :numref:`chap_rnn` and :numref:`chap_modern_rnn`
-introduce recurrent neural networks (RNNs), 
-models that exploit sequential (e.g., temporal) 
+introduce recurrent neural networks (RNNs),
+models that exploit sequential (e.g., temporal)
 structure in data and are commonly used
-for natural language processing 
+for natural language processing
 and time series prediction.
 In :numref:`chap_attention-and-transformers`, 
 we introduce a relatively new class of models
 based on so-called *attention mechanisms*
 that has displaced RNNs as the dominant architecture
 for most natural language processing tasks.
-These sections will bring you up to speed 
+These sections will bring you up to speed
 on the most powerful and general tools
 that are widely used by deep learning practitioners.
 
-* **Part 3: Scalability, Efficiency, and Applications.**
-In :numref:`chap_optimization`,
+* **Part 3: Scalability, Efficiency, and Applications** (available [online](https://d2l.ai)).
+In Chapter 12,
 we discuss several common optimization algorithms
 used to train deep learning models.
-Next, in :numref:`chap_performance`,
+Next, in Chapter 13,
 we examine several key factors
 that influence the computational performance 
 of deep learning code.
-Then, in :numref:`chap_cv`,
+Then, in Chapter 14,
 we illustrate major applications 
 of deep learning in computer vision.
-Finally, in :numref:`chap_nlp_pretrain` and :numref:`chap_nlp_app`,
+Finally, in Chapter 15 and Chapter 16,
 we demonstrate how to pretrain language representation models 
 and apply them to natural language processing tasks.
-This part is available [online](https://d2l.ai).
 
 
 ### Code
@@ -336,7 +334,7 @@ or collection of import statements) with `#@save`
 to indicate that they will be accessed later
 via the `d2l` package.
 We offer a detailed overview 
-of these functions and classes in :numref:`sec_d2l`.
+of these classes and functions in :numref:`sec_d2l`.
 The `d2l` package is lightweight and only requires
 the following dependencies:
 
@@ -346,6 +344,7 @@ the following dependencies:
 import inspect
 import collections
 from collections import defaultdict
+import gym
 from IPython import display
 import math
 from matplotlib import pyplot as plt
@@ -354,6 +353,7 @@ import os
 import pandas as pd
 import random
 import re
+from scipy.spatial import distance_matrix
 import shutil
 import sys
 import tarfile
@@ -367,38 +367,38 @@ d2l = sys.modules[__name__]
 :begin_tab:`mxnet`
 Most of the code in this book is based on Apache MXNet,
 an open-source framework for deep learning
-that is the preferred choice 
+that is the preferred choice
 of AWS (Amazon Web Services),
 as well as many colleges and companies.
-All of the code in this book has passed tests 
+All of the code in this book has passed tests
 under the newest MXNet version.
-However, due to the rapid development of deep learning, 
-some code *in the print edition* 
+However, due to the rapid development of deep learning,
+some code *in the print edition*
 may not work properly in future versions of MXNet.
 We plan to keep the online version up-to-date.
 In case you encounter any problems,
 please consult :ref:`chap_installation`
 to update your code and runtime environment.
 
-Here is how we import modules from MXNet.
+Here is a list of dependencies in our MXNet implementation.
 :end_tab:
 
 :begin_tab:`pytorch`
 Most of the code in this book is based on PyTorch,
 an extremely popular open-source framework
-that has been enthusiastically embraced 
+that has been enthusiastically embraced
 by the deep learning research community.
-All of the code in this book has passed tests 
+All of the code in this book has passed tests
 under the latest stable version of PyTorch.
 However, due to the rapid development of deep learning,
-some code *in the print edition* 
+some code *in the print edition*
 may not work properly in future versions of PyTorch.
 We plan to keep the online version up-to-date.
 In case you encounter any problems,
 please consult :ref:`chap_installation`
 to update your code and runtime environment.
 
-Here is how we import modules from PyTorch.
+Here is a list of dependencies in our PyTorch implementation.
 :end_tab:
 
 :begin_tab:`tensorflow`
@@ -406,17 +406,38 @@ Most of the code in this book is based on TensorFlow,
 an open-source framework for deep learning
 that is widely adopted in industry
 and popular among researchers.
-All of the code in this book has passed tests 
+All of the code in this book has passed tests
 under the latest stable version TensorFlow.
-However, due to the rapid development of deep learning, 
-some code *in the print edition* 
+However, due to the rapid development of deep learning,
+some code *in the print edition*
 may not work properly in future versions of TensorFlow.
 We plan to keep the online version up-to-date.
 In case you encounter any problems,
 please consult :ref:`chap_installation`
 to update your code and runtime environment.
 
-Here is how we import modules from TensorFlow.
+Here is a list of dependencies in our TensorFlow implementation.
+:end_tab:
+
+:begin_tab:`jax`
+Most of the code in this book is based on Jax,
+an open-source framework enabling composable function
+transformations such as differentiation of arbitrary
+Python and NumPy functions, as well as JIT compliation,
+vectorization and much more! It is becoming popular in
+the machine learning research space and has an
+easy-to-learn NumPy-like API. Actually, JAX tries
+to achieve 1:1 parity with NumPy, so switching your
+code could be as simple as changing a single import statement!
+However, due to the rapid development of deep learning,
+some code *in the print edition*
+may not work properly in future versions of Jax.
+We plan to keep the online version up-to-date.
+In case you encounter any problems,
+please consult :ref:`chap_installation`
+to update your code and runtime environment.
+
+Here is a list of dependencies in our JAX implementation.
 :end_tab:
 
 ```{.python .input}
@@ -445,6 +466,25 @@ import numpy as np
 import tensorflow as tf
 ```
 
+```{.python .input}
+#@tab jax
+#@save
+from dataclasses import field
+from functools import partial
+import flax
+from flax import linen as nn
+from flax.training import train_state
+import jax
+from jax import numpy as jnp
+from jax import grad, vmap
+import numpy as np
+import optax
+import tensorflow as tf
+import tensorflow_datasets as tfds
+from types import FunctionType
+from typing import Any
+```
+
 ### Target Audience
 
 This book is for students (undergraduate or graduate),
@@ -455,24 +495,24 @@ no previous background in deep learning or machine learning is required.
 Fully explaining the methods of deep learning
 requires some mathematics and programming,
 but we will only assume that you come in with some basics,
-including modest amounts of linear algebra, 
+including modest amounts of linear algebra,
 calculus, probability, and Python programming.
 Just in case you forget the basics,
-the Appendix provides a refresher 
-on most of the mathematics 
+the [online Appendix](https://d2l.ai/chapter_appendix-mathematics-for-deep-learning/index.html) provides a refresher
+on most of the mathematics
 you will find in this book.
-Most of the time, we will prioritize 
+Most of the time, we will prioritize
 intuition and ideas
 over mathematical rigor.
-If you would like to extend these foundations 
+If you would like to extend these foundations
 beyond the prerequisites to understand our book,
 we happily recommend some other terrific resources:
 Linear Analysis by Bela Bollobas :cite:`Bollobas.1999`
 covers linear algebra and functional analysis in great depth.
-All of Statistics :cite:`Wasserman.2013` 
+All of Statistics :cite:`Wasserman.2013`
 provides a marvelous introduction to statistics.
-Joe Blitzstein's [books](https://www.amazon.com/Introduction-Probability-Chapman-Statistical-Science/dp/1138369918) 
-and [courses](https://projects.iq.harvard.edu/stat110/home) 
+Joe Blitzstein's [books](https://www.amazon.com/Introduction-Probability-Chapman-Statistical-Science/dp/1138369918)
+and [courses](https://projects.iq.harvard.edu/stat110/home)
 on probability and inference are pedagogical gems.
 And if you have not used Python before,
 you may want to peruse this [Python tutorial](http://learnpython.org/).
@@ -481,7 +521,7 @@ you may want to peruse this [Python tutorial](http://learnpython.org/).
 ### Forum
 
 Associated with this book, we have launched a discussion forum,
-located at [discuss.d2l.ai](https://discuss.d2l.ai/).
+located at [discuss.d2l.ai](https://discuss.d2l.ai/c/5).
 When you have questions on any section of the book,
 you can find a link to the associated discussion page
 at the end of each notebook.
@@ -492,9 +532,13 @@ at the end of each notebook.
 We are indebted to the hundreds of contributors for both
 the English and the Chinese drafts.
 They helped improve the content and offered valuable feedback.
-We thank Anirudh Dagar and Yuan Tang for adapting part of early MXNet code into PyTorch and TensorFlow implementations, respectively.
-We thank a team from Baidu for adapting more recent PyTorch code into PaddlePaddle implementations in the Chinese draft.
+This book was originally implemented with MXNet as the primary framework.
+We thank Anirudh Dagar and Yuan Tang for adapting a majority part of earlier MXNet code into PyTorch and TensorFlow implementations, respectively.
+Since July 2021, we have redesigned and reimplemented this book in PyTorch, MXNet, and TensorFlow, choosing PyTorch as the primary framework.
+We thank Anirudh Dagar for adapting a majority part of more recent PyTorch code into JAX implementations.
+We thank Gaosheng Wu, Liujun Hu, Ge Zhang, and Jiehang Xie from Baidu for adapting a majority part of more recent PyTorch code into PaddlePaddle implementations in the Chinese draft.
 We thank Shuai Zhang for integrating the LaTeX style from the press into the PDF building.
+
 On GitHub, we thank every contributor of this English draft
 for making it better for everyone.
 Their GitHub IDs or names are (in no particular order):
@@ -536,11 +580,13 @@ Kaan Sancak, regob, AlexSauer, Gopalakrishna Ramachandra, Tobias Uelwer, Chao Wa
 Nicolas Corthorn, akash5474, kxxt, zxydi1992, Jacob Britton, Shuangchi He, zhmou, krahets, Jie-Han Chen,
 Atishay Garg, Marcel Flygare, adtygan, Nik Vaessen, bolded, Louis Schlessinger, Balaji Varatharajan,
 atgctg, Kaixin Li, Victor Barbaros, Riccardo Musto, Elizabeth Ho, azimjonn, Guilherme Miotto, Alessandro Finamore,
-Joji Joseph, Anthony Biel, Zeming Zhao, shjustinbaek, gab-chen, nantekoto, Yutaro Nishiyama.
+Joji Joseph, Anthony Biel, Zeming Zhao, shjustinbaek, gab-chen, nantekoto, Yutaro Nishiyama, Oren Amsalem,
+Tian-MaoMao, Amin Allahyar, Gijs van Tulder, Mikhail Berkov, iamorphen, Matthew Caseres, Andrew Walsh,
+pggPL, RohanKarthikeyan, Ryan Choi, Likun Lei.
 
 We thank Amazon Web Services, especially Swami Sivasubramanian, Peter DeSantis, Adam Selipsky,
-and Andrew Jassy for their generous support in writing this book. 
-Without the available time, resources, discussions with colleagues, 
+and Andrew Jassy for their generous support in writing this book.
+Without the available time, resources, discussions with colleagues,
 and continuous encouragement, this book would not have happened.
 
 
@@ -559,7 +605,7 @@ and the engineering techniques to implement it all.
 This book presents a comprehensive resource, 
 including prose, figures, mathematics, and code, all in one place.
 To ask (or answer) questions related to this book,
-visit our forum at https://discuss.d2l.ai/.
+visit our forum at https://discuss.d2l.ai.
 All of our notebooks are available for download
 on the [D2L.ai website](https://d2l.ai)
 and on [GitHub](https://github.com/d2l-ai/d2l-en).

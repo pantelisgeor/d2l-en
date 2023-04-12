@@ -1,6 +1,6 @@
 ```{.python .input}
 %load_ext d2lbook.tab
-tab.interact_select(['mxnet', 'pytorch', 'tensorflow'])
+tab.interact_select(['mxnet', 'pytorch', 'tensorflow', 'jax'])
 ```
 
 # Multi-Branch Networks  (GoogLeNet)
@@ -16,6 +16,35 @@ convolution kernels in an ingenious way. While other works tried to identify whi
 In what follows we introduce a slightly simplified version of GoogLeNet: the original design included a number of tricks to stabilize training through intermediate loss functions, applied to multiple layers of the network. 
 They are no longer necessary due to the availability of improved training algorithms. 
 
+```{.python .input}
+%%tab mxnet
+from d2l import mxnet as d2l
+from mxnet import np, npx, init
+from mxnet.gluon import nn
+npx.set_np()
+```
+
+```{.python .input}
+%%tab pytorch
+from d2l import torch as d2l
+import torch
+from torch import nn
+from torch.nn import functional as F
+```
+
+```{.python .input}
+%%tab tensorflow
+import tensorflow as tf
+from d2l import tensorflow as d2l
+```
+
+```{.python .input}
+%%tab jax
+from d2l import jax as d2l
+from flax import linen as nn
+from jax import numpy as jnp
+import jax
+```
 
 ## (**Inception Blocks**)
 
@@ -43,13 +72,8 @@ are the number of output channels per layer, i.e., how to allocate capacity amon
 
 ```{.python .input}
 %%tab mxnet
-from d2l import mxnet as d2l
-from mxnet import np, npx, init
-from mxnet.gluon import nn
-npx.set_np()
-
 class Inception(nn.Block):
-    # `c1`--`c4` are the number of output channels for each branch
+    # c1--c4 are the number of output channels for each branch
     def __init__(self, c1, c2, c3, c4, **kwargs):
         super(Inception, self).__init__(**kwargs)
         # Branch 1
@@ -76,13 +100,8 @@ class Inception(nn.Block):
 
 ```{.python .input}
 %%tab pytorch
-from d2l import torch as d2l
-import torch
-from torch import nn
-from torch.nn import functional as F
-
 class Inception(nn.Module):
-    # `c1`--`c4` are the number of output channels for each branch
+    # c1--c4 are the number of output channels for each branch
     def __init__(self, c1, c2, c3, c4, **kwargs):
         super(Inception, self).__init__(**kwargs)
         # Branch 1
@@ -107,11 +126,8 @@ class Inception(nn.Module):
 
 ```{.python .input}
 %%tab tensorflow
-import tensorflow as tf
-from d2l import tensorflow as d2l
-
 class Inception(tf.keras.Model):
-    # `c1`--`c4` are the number of output channels for each branch
+    # c1--c4 are the number of output channels for each branch
     def __init__(self, c1, c2, c3, c4):
         super().__init__()
         self.b1_1 = tf.keras.layers.Conv2D(c1, 1, activation='relu')
@@ -130,6 +146,37 @@ class Inception(tf.keras.Model):
         b3 = self.b3_2(self.b3_1(x))
         b4 = self.b4_2(self.b4_1(x))
         return tf.keras.layers.Concatenate()([b1, b2, b3, b4])
+```
+
+```{.python .input}
+%%tab jax
+class Inception(nn.Module):
+    # `c1`--`c4` are the number of output channels for each branch
+    c1: int
+    c2: tuple
+    c3: tuple
+    c4: int
+
+    def setup(self):
+        # Branch 1
+        self.b1_1 = nn.Conv(self.c1, kernel_size=(1, 1))
+        # Branch 2
+        self.b2_1 = nn.Conv(self.c2[0], kernel_size=(1, 1))
+        self.b2_2 = nn.Conv(self.c2[1], kernel_size=(3, 3), padding='same')
+        # Branch 3
+        self.b3_1 = nn.Conv(self.c3[0], kernel_size=(1, 1))
+        self.b3_2 = nn.Conv(self.c3[1], kernel_size=(5, 5), padding='same')
+        # Branch 4
+        self.b4_1 = lambda x: nn.max_pool(x, window_shape=(3, 3),
+                                          strides=(1, 1), padding='same')
+        self.b4_2 = nn.Conv(self.c4, kernel_size=(1, 1))
+
+    def __call__(self, x):
+        b1 = nn.relu(self.b1_1(x))
+        b2 = nn.relu(self.b2_2(nn.relu(self.b2_1(x))))
+        b3 = nn.relu(self.b3_2(nn.relu(self.b3_1(x))))
+        b4 = nn.relu(self.b4_2(self.b4_1(x)))
+        return jnp.concatenate((b1, b2, b3, b4), axis=-1)
 ```
 
 To gain some intuition for why this network works so well,
@@ -155,7 +202,7 @@ We can now implement GoogLeNet piece by piece. Let's begin with the stem.
 The first module uses a 64-channel $7\times 7$ convolutional layer.
 
 ```{.python .input}
-%%tab all
+%%tab pytorch, mxnet, tensorflow
 class GoogleNet(d2l.Classifier):
     def b1(self):
         if tab.selected('mxnet'):
@@ -174,6 +221,24 @@ class GoogleNet(d2l.Classifier):
                                        activation='relu'),
                 tf.keras.layers.MaxPool2D(pool_size=3, strides=2,
                                           padding='same')])
+```
+
+```{.python .input}
+%%tab jax
+class GoogleNet(d2l.Classifier):
+    lr: float = 0.1
+    num_classes: int = 10
+
+    def setup(self):
+        self.net = nn.Sequential([self.b1(), self.b2(), self.b3(), self.b4(),
+                                  self.b5(), nn.Dense(self.num_classes)])
+
+    def b1(self):
+        return nn.Sequential([
+                nn.Conv(64, kernel_size=(7, 7), strides=(2, 2), padding='same'),
+                nn.relu,
+                lambda x: nn.max_pool(x, window_shape=(3, 3), strides=(2, 2),
+                                      padding='same')])
 ```
 
 The second module uses two convolutional layers:
@@ -200,6 +265,14 @@ def b2(self):
             tf.keras.layers.Conv2D(64, 1, activation='relu'),
             tf.keras.layers.Conv2D(192, 3, padding='same', activation='relu'),
             tf.keras.layers.MaxPool2D(pool_size=3, strides=2, padding='same')])
+    if tab.selected('jax'):
+        return nn.Sequential([nn.Conv(64, kernel_size=(1, 1)),
+                              nn.relu,
+                              nn.Conv(192, kernel_size=(3, 3), padding='same'),
+                              nn.relu,
+                              lambda x: nn.max_pool(x, window_shape=(3, 3),
+                                                    strides=(2, 2),
+                                                    padding='same')])
 ```
 
 The third module connects two complete Inception blocks in series.
@@ -235,6 +308,12 @@ def b3(self):
             Inception(64, (96, 128), (16, 32), 32),
             Inception(128, (128, 192), (32, 96), 64),
             tf.keras.layers.MaxPool2D(pool_size=3, strides=2, padding='same')])
+    if tab.selected('jax'):
+        return nn.Sequential([Inception(64, (96, 128), (16, 32), 32),
+                              Inception(128, (128, 192), (32, 96), 64),
+                              lambda x: nn.max_pool(x, window_shape=(3, 3),
+                                                    strides=(2, 2),
+                                                    padding='same')])
 ```
 
 The fourth module is more complicated.
@@ -281,6 +360,15 @@ def b4(self):
             Inception(112, (144, 288), (32, 64), 64),
             Inception(256, (160, 320), (32, 128), 128),
             tf.keras.layers.MaxPool2D(pool_size=3, strides=2, padding='same')])
+    if tab.selected('jax'):
+        return nn.Sequential([Inception(192, (96, 208), (16, 48), 64),
+                              Inception(160, (112, 224), (24, 64), 64),
+                              Inception(128, (128, 256), (24, 64), 64),
+                              Inception(112, (144, 288), (32, 64), 64),
+                              Inception(256, (160, 320), (32, 128), 128),
+                              lambda x: nn.max_pool(x, window_shape=(3, 3),
+                                                    strides=(2, 2),
+                                                    padding='same')])
 ```
 
 The fifth module has two Inception blocks with $256+320+128+128=832$
@@ -315,12 +403,21 @@ def b5(self):
             Inception(384, (192, 384), (48, 128), 128),
             tf.keras.layers.GlobalAvgPool2D(),
             tf.keras.layers.Flatten()])
+    if tab.selected('jax'):
+        return nn.Sequential([Inception(256, (160, 320), (32, 128), 128),
+                              Inception(384, (192, 384), (48, 128), 128),
+                              # Flax does not provide a GlobalAvgPool2D layer
+                              lambda x: nn.avg_pool(x,
+                                                    window_shape=x.shape[1:3],
+                                                    strides=x.shape[1:3],
+                                                    padding='valid'),
+                              lambda x: x.reshape((x.shape[0], -1))])
 ```
 
-Now that we defined all blocks `b1` through `b5`, it's just a matter of assembling them all into a full network.
+Now that we defined all blocks `b1` through `b5`, it is just a matter of assembling them all into a full network.
 
 ```{.python .input}
-%%tab all
+%%tab pytorch, mxnet, tensorflow
 @d2l.add_to_class(GoogleNet)
 def __init__(self, lr=0.1, num_classes=10):
     super(GoogleNet, self).__init__()
@@ -357,7 +454,7 @@ model = GoogleNet().layer_summary((1, 1, 96, 96))
 ```
 
 ```{.python .input}
-%%tab tensorflow
+%%tab tensorflow, jax
 model = GoogleNet().layer_summary((1, 96, 96, 1))
 ```
 
@@ -368,7 +465,7 @@ As before, we train our model using the Fashion-MNIST dataset.
  before invoking the training procedure.
 
 ```{.python .input}
-%%tab mxnet, pytorch
+%%tab mxnet, pytorch, jax
 model = GoogleNet(lr=0.01)
 trainer = d2l.Trainer(max_epochs=10, num_gpus=1)
 data = d2l.FashionMNIST(batch_size=128, resize=(96, 96))
@@ -402,9 +499,9 @@ Over the following sections we will encounter a number of design choices (e.g., 
    1. Add a batch normalization layer :cite:`Ioffe.Szegedy.2015`, as described
       later in :numref:`sec_batch_norm`.
    1. Make adjustments to the Inception block (width, choice and order of convolutions), as described in
-      :cite:`Szegedy.Vanhoucke.Ioffe.ea.2016`.
+      :citet:`Szegedy.Vanhoucke.Ioffe.ea.2016`.
    1. Use label smoothing for model regularization, as described in
-      :cite:`Szegedy.Vanhoucke.Ioffe.ea.2016`.
+      :citet:`Szegedy.Vanhoucke.Ioffe.ea.2016`.
    1. Make further adjustments to the Inception block by adding residual connection
       :cite:`Szegedy.Ioffe.Vanhoucke.ea.2017`, as described later in
       :numref:`sec_resnet`.

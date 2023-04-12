@@ -1,6 +1,6 @@
 ```{.python .input}
 %load_ext d2lbook.tab
-tab.interact_select(['mxnet', 'pytorch', 'tensorflow'])
+tab.interact_select(['mxnet', 'pytorch', 'tensorflow', 'jax'])
 ```
 
 # Data Preprocessing
@@ -18,7 +18,6 @@ This section, while no substitute
 for a proper *pandas* [tutorial](https://pandas.pydata.org/pandas-docs/stable/user_guide/10min.html),
 will give you a crash course
 on some of the most common routines.
-
 
 ## Reading the Dataset
 
@@ -93,7 +92,7 @@ we can treat `NaN` as a category.**]
 Since the `RoofType` column takes values `Slate` and `NaN`,
 `pandas` can convert this column 
 into two columns `RoofType_Slate` and `RoofType_nan`.
-A row whose alley type is `Slate` will set values 
+A row whose roof type is `Slate` will set values 
 of `RoofType_Slate` and `RoofType_nan` to 1 and 0, respectively.
 The converse holds for a row with a missing `RoofType` value.
 
@@ -141,6 +140,14 @@ X, y
 import tensorflow as tf
 
 X, y = tf.constant(inputs.values), tf.constant(targets.values)
+X, y
+```
+
+```{.python .input}
+%%tab jax
+from jax import numpy as jnp
+
+X, y = jnp.array(inputs.values), jnp.array(targets.values)
 X, y
 ```
 

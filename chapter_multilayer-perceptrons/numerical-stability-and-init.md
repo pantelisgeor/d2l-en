@@ -1,6 +1,6 @@
 ```{.python .input}
 %load_ext d2lbook.tab
-tab.interact_select(['mxnet', 'pytorch', 'tensorflow'])
+tab.interact_select(['mxnet', 'pytorch', 'tensorflow', 'jax'])
 ```
 
 # Numerical Stability and Initialization
@@ -28,6 +28,36 @@ and discuss some useful heuristics
 that you will find useful
 throughout your career in deep learning.
 
+```{.python .input}
+%%tab mxnet
+%matplotlib inline
+from d2l import mxnet as d2l
+from mxnet import autograd, np, npx
+npx.set_np()
+```
+
+```{.python .input}
+%%tab pytorch
+%matplotlib inline
+from d2l import torch as d2l
+import torch
+```
+
+```{.python .input}
+%%tab tensorflow
+%matplotlib inline
+from d2l import tensorflow as d2l
+import tensorflow as tf
+```
+
+```{.python .input}
+%%tab jax
+%matplotlib inline
+from d2l import jax as d2l
+import jax
+from jax import numpy as jnp
+from jax import grad, vmap
+```
 
 ## Vanishing and Exploding Gradients
 
@@ -92,11 +122,6 @@ to see why it can cause vanishing gradients.
 
 ```{.python .input}
 %%tab mxnet
-%matplotlib inline
-from d2l import mxnet as d2l
-from mxnet import autograd, np, npx
-npx.set_np()
-
 x = np.arange(-8.0, 8.0, 0.1)
 x.attach_grad()
 with autograd.record():
@@ -108,10 +133,6 @@ d2l.plot(x, [y, x.grad], legend=['sigmoid', 'gradient'], figsize=(4.5, 2.5))
 
 ```{.python .input}
 %%tab pytorch
-%matplotlib inline
-from d2l import torch as d2l
-import torch
-
 x = torch.arange(-8.0, 8.0, 0.1, requires_grad=True)
 y = torch.sigmoid(x)
 y.backward(torch.ones_like(x))
@@ -122,14 +143,19 @@ d2l.plot(x.detach().numpy(), [y.detach().numpy(), x.grad.numpy()],
 
 ```{.python .input}
 %%tab tensorflow
-%matplotlib inline
-from d2l import tensorflow as d2l
-import tensorflow as tf
-
 x = tf.Variable(tf.range(-8.0, 8.0, 0.1))
 with tf.GradientTape() as t:
     y = tf.nn.sigmoid(x)
 d2l.plot(x.numpy(), [y.numpy(), t.gradient(y, x).numpy()],
+         legend=['sigmoid', 'gradient'], figsize=(4.5, 2.5))
+```
+
+```{.python .input}
+%%tab jax
+x = jnp.arange(-8.0, 8.0, 0.1)
+y = jax.nn.sigmoid(x)
+grad_sigmoid = vmap(grad(jax.nn.sigmoid))
+d2l.plot(x, [y, grad_sigmoid(x)],
          legend=['sigmoid', 'gradient'], figsize=(4.5, 2.5))
 ```
 
@@ -168,7 +194,6 @@ M = np.random.normal(size=(4, 4))
 print('a single matrix', M)
 for i in range(100):
     M = np.dot(M, np.random.normal(size=(4, 4)))
-
 print('after multiplying 100 matrices', M)
 ```
 
@@ -178,7 +203,6 @@ M = torch.normal(0, 1, size=(4, 4))
 print('a single matrix \n',M)
 for i in range(100):
     M = M @ torch.normal(0, 1, size=(4, 4))
-
 print('after multiplying 100 matrices\n', M)
 ```
 
@@ -188,8 +212,17 @@ M = tf.random.normal((4, 4))
 print('a single matrix \n', M)
 for i in range(100):
     M = tf.matmul(M, tf.random.normal((4, 4)))
-
 print('after multiplying 100 matrices\n', M.numpy())
+```
+
+```{.python .input}
+%%tab jax
+get_key = lambda: jax.random.PRNGKey(d2l.get_seed())  # Generate PRNG keys
+M = jax.random.normal(get_key(), (4, 4))
+print('a single matrix \n', M)
+for i in range(100):
+    M = jnp.matmul(M, jax.random.normal(get_key(), (4, 4)))
+print('after multiplying 100 matrices\n', M)
 ```
 
 ### Breaking the Symmetry
@@ -316,7 +349,7 @@ Typically, the Xavier initialization
 samples weights from a Gaussian distribution
 with zero mean and variance
 $\sigma^2 = \frac{2}{n_\mathrm{in} + n_\mathrm{out}}$.
-We can also adapt Xavier's intuition to
+We can also adapt this to
 choose the variance when sampling weights
 from a uniform distribution.
 Note that the uniform distribution $U(-a, a)$ has variance $\frac{a^2}{3}$.

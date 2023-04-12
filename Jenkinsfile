@@ -34,11 +34,14 @@ stage("Build and Publish") {
       ./static/cache.sh store _build/eval/data
       """
 
-      sh label: "Execute Notebooks [MXNet]", script: """set -ex
+      sh label: "Execute Notebooks [Jax]", script: """set -ex
       conda activate ${ENV_NAME}
-      ./static/cache.sh restore _build/eval_mxnet/data
-      d2lbook build eval --tab mxnet
-      ./static/cache.sh store _build/eval_mxnet/data
+      ./static/cache.sh restore _build/eval_jax/data
+      export XLA_PYTHON_CLIENT_MEM_FRACTION=.70
+      export TF_CPP_MIN_LOG_LEVEL=3
+      export TF_FORCE_GPU_ALLOW_GROWTH=true
+      d2lbook build eval --tab jax
+      ./static/cache.sh store _build/eval_jax/data
       """
 
       sh label: "Execute Notebooks [TensorFlow]", script: """set -ex
@@ -48,6 +51,13 @@ stage("Build and Publish") {
       export TF_FORCE_GPU_ALLOW_GROWTH=true
       d2lbook build eval --tab tensorflow
       ./static/cache.sh store _build/eval_tensorflow/data
+      """
+      
+      sh label: "Execute Notebooks [MXNet]", script: """set -ex
+      conda activate ${ENV_NAME}
+      ./static/cache.sh restore _build/eval_mxnet/data
+      d2lbook build eval --tab mxnet
+      ./static/cache.sh store _build/eval_mxnet/data
       """
 
       sh label:"Build HTML", script:"""set -ex
@@ -72,11 +82,12 @@ stage("Build and Publish") {
         d2lbook deploy html pdf pkg colab sagemaker slides --s3 s3://${LANG}.d2l.ai/
         """
 
-        sh label:"Release d2l", script:"""set -ex
-        conda activate ${ENV_NAME}
-        pip install setuptools wheel twine
-        python setup.py bdist_wheel
-        """
+        // Publish d2l pypi package
+        // sh label:"Release d2l", script:"""set -ex
+        // conda activate ${ENV_NAME}
+        // pip install setuptools wheel twine
+        // python setup.py bdist_wheel
+        // """
       } else {
         sh label:"Publish", script:"""set -ex
         conda activate ${ENV_NAME}

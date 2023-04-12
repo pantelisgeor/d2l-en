@@ -29,6 +29,37 @@ and they can only be computed by looking at data at previous time steps.
 
 *Recurrent neural networks* (RNNs) are neural networks with hidden states. Before introducing the RNN model, we first revisit the MLP model introduced in :numref:`sec_mlp`.
 
+```{.python .input}
+%load_ext d2lbook.tab
+tab.interact_select('mxnet', 'pytorch', 'tensorflow', 'jax')
+```
+
+```{.python .input}
+%%tab mxnet
+from d2l import mxnet as d2l
+from mxnet import np, npx
+npx.set_np()
+```
+
+```{.python .input}
+%%tab pytorch
+from d2l import torch as d2l
+import torch
+```
+
+```{.python .input}
+%%tab tensorflow
+from d2l import tensorflow as d2l
+import tensorflow as tf
+```
+
+```{.python .input}
+%%tab jax
+from d2l import jax as d2l
+import jax
+from jax import numpy as jnp
+```
+
 ## Neural Networks without Hidden States
 
 Let's take a look at an MLP with a single hidden layer.
@@ -131,30 +162,6 @@ Multiplying `X` by `W_xh`, and `H` by `W_hh`, respectively, and then adding thes
 we obtain a matrix of shape (3, 4).
 
 ```{.python .input}
-%load_ext d2lbook.tab
-tab.interact_select('mxnet', 'pytorch', 'tensorflow')
-```
-
-```{.python .input}
-%%tab mxnet
-from d2l import mxnet as d2l
-from mxnet import np, npx
-npx.set_np()
-```
-
-```{.python .input}
-%%tab pytorch
-from d2l import torch as d2l
-import torch
-```
-
-```{.python .input}
-%%tab tensorflow
-from d2l import tensorflow as d2l
-import tensorflow as tf
-```
-
-```{.python .input}
 %%tab mxnet, pytorch
 X, W_xh = d2l.randn(3, 1), d2l.randn(1, 4)
 H, W_hh = d2l.randn(3, 4), d2l.randn(4, 4)
@@ -165,6 +172,15 @@ d2l.matmul(X, W_xh) + d2l.matmul(H, W_hh)
 %%tab tensorflow
 X, W_xh = d2l.normal((3, 1)), d2l.normal((1, 4))
 H, W_hh = d2l.normal((3, 4)), d2l.normal((4, 4))
+d2l.matmul(X, W_xh) + d2l.matmul(H, W_hh)
+```
+
+```{.python .input}
+%%tab jax
+X, W_xh = jax.random.normal(d2l.get_key(), (3, 1)), jax.random.normal(
+                                                        d2l.get_key(), (1, 4))
+H, W_hh = jax.random.normal(d2l.get_key(), (3, 4)), jax.random.normal(
+                                                        d2l.get_key(), (4, 4))
 d2l.matmul(X, W_xh) + d2l.matmul(H, W_hh)
 ```
 

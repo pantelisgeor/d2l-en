@@ -1,6 +1,6 @@
 ```{.python .input}
 %load_ext d2lbook.tab
-tab.interact_select(['mxnet', 'pytorch', 'tensorflow'])
+tab.interact_select(['mxnet', 'pytorch', 'tensorflow', 'jax'])
 ```
 
 # Convolutional Neural Networks (LeNet)
@@ -39,6 +39,35 @@ for processing deposits in ATM machines.
 To this day, some ATMs still run the code
 that Yann LeCun and his colleague Leon Bottou wrote in the 1990s!
 
+```{.python .input}
+%%tab mxnet
+from d2l import mxnet as d2l
+from mxnet import autograd, gluon, init, np, npx
+from mxnet.gluon import nn
+npx.set_np()
+```
+
+```{.python .input}
+%%tab pytorch
+from d2l import torch as d2l
+import torch
+from torch import nn
+```
+
+```{.python .input}
+%%tab tensorflow
+import tensorflow as tf
+from d2l import tensorflow as d2l
+```
+
+```{.python .input}
+%%tab jax
+from d2l import jax as d2l
+from flax import linen as nn
+import jax
+from jax import numpy as jnp
+from types import FunctionType
+```
 
 ## LeNet
 
@@ -91,27 +120,6 @@ using Xavier initialization as
 introduced in :numref:`subsec_xavier`.
 
 ```{.python .input}
-%%tab mxnet
-from d2l import mxnet as d2l
-from mxnet import autograd, gluon, init, np, npx
-from mxnet.gluon import nn
-npx.set_np()
-```
-
-```{.python .input}
-%%tab pytorch
-from d2l import torch as d2l
-import torch
-from torch import nn
-```
-
-```{.python .input}
-%%tab tensorflow
-import tensorflow as tf
-from d2l import tensorflow as d2l
-```
-
-```{.python .input}
 %%tab pytorch
 def init_cnn(module):  #@save
     """Initialize weights for CNNs."""
@@ -120,8 +128,9 @@ def init_cnn(module):  #@save
 ```
 
 ```{.python .input}
-%%tab all
-class LeNet(d2l.Classifier):
+%%tab pytorch, mxnet, tensorflow
+class LeNet(d2l.Classifier):  #@save
+    """The LeNet-5 model."""
     def __init__(self, lr=0.1, num_classes=10):
         super().__init__()
         self.save_hyperparameters()
@@ -161,11 +170,39 @@ class LeNet(d2l.Classifier):
                 tf.keras.layers.Dense(num_classes)])
 ```
 
+```{.python .input}
+%%tab jax
+class LeNet(d2l.Classifier):  #@save
+    """The LeNet-5 model."""
+    lr: float = 0.1
+    num_classes: int = 10
+    kernel_init: FunctionType = nn.initializers.xavier_uniform
+
+    def setup(self):
+        self.net = nn.Sequential([
+            nn.Conv(features=6, kernel_size=(5, 5), padding='SAME',
+                    kernel_init=self.kernel_init()),
+            nn.sigmoid,
+            lambda x: nn.avg_pool(x, window_shape=(2, 2), strides=(2, 2)),
+            nn.Conv(features=16, kernel_size=(5, 5), padding='VALID',
+                    kernel_init=self.kernel_init()),
+            nn.sigmoid,
+            lambda x: nn.avg_pool(x, window_shape=(2, 2), strides=(2, 2)),
+            lambda x: x.reshape((x.shape[0], -1)),  # flatten
+            nn.Dense(features=120, kernel_init=self.kernel_init()),
+            nn.sigmoid,
+            nn.Dense(features=84, kernel_init=self.kernel_init()),
+            nn.sigmoid,
+            nn.Dense(features=self.num_classes, kernel_init=self.kernel_init())
+        ])
+```
+
 We take some liberty in the reproduction of LeNet insofar as we replace the Gaussian activation layer by
 a softmax layer. This greatly simplifies the implementation, not the least due to the
 fact that the Gaussian decoder is rarely used nowadays. Other than that, this network matches
 the original LeNet-5 architecture.
 
+:begin_tab:`pytorch, mxnet, tensorflow`
 Let's see what happens inside the network. By passing a
 single-channel (black and white)
 $28 \times 28$ image through the network
@@ -173,6 +210,24 @@ and printing the output shape at each layer,
 we can [**inspect the model**] to make sure
 that its operations line up with
 what we expect from :numref:`img_lenet_vert`.
+:end_tab:
+
+:begin_tab:`jax`
+Let's see what happens inside the network. By passing a
+single-channel (black and white)
+$28 \times 28$ image through the network
+and printing the output shape at each layer,
+we can [**inspect the model**] to make sure
+that its operations line up with
+what we expect from :numref:`img_lenet_vert`.
+Flax provides `nn.tabulate`, a nifty method to summarise the layers and
+parameters in our network. Here we use the `bind` method to create a bounded model.
+The variables are now bound to the `d2l.Module` class, i.e., this bounded model
+becomes a stateful object which can then be used to access the `Sequential`
+object attribute `net` and the `layers` within. Note that the `bind` method should
+only be used for interactive experimentation, and is not a direct
+replacement for the `apply` method.
+:end_tab:
 
 ![Compressed notation for LeNet-5.](../img/lenet-vert.svg)
 :label:`img_lenet_vert`
@@ -185,7 +240,7 @@ def layer_summary(self, X_shape):
     for layer in self.net:
         X = layer(X)
         print(layer.__class__.__name__, 'output shape:\t', X.shape)
-
+        
 model = LeNet()
 model.layer_summary((1, 1, 28, 28))
 ```
@@ -196,6 +251,22 @@ model.layer_summary((1, 1, 28, 28))
 def layer_summary(self, X_shape):
     X = d2l.normal(X_shape)
     for layer in self.net.layers:
+        X = layer(X)
+        print(layer.__class__.__name__, 'output shape:\t', X.shape)
+
+model = LeNet()
+model.layer_summary((1, 28, 28, 1))
+```
+
+```{.python .input}
+%%tab jax
+@d2l.add_to_class(d2l.Classifier)  #@save
+def layer_summary(self, X_shape, key=d2l.get_key()):
+    X = jnp.zeros(X_shape)
+    params = self.init(key, X)
+    bound_model = self.clone().bind(params, mutable=['batch_stats'])
+    _ = bound_model(X)
+    for layer in bound_model.net.layers:
         X = layer(X)
         print(layer.__class__.__name__, 'output shape:\t', X.shape)
 
@@ -246,7 +317,7 @@ Just as with MLPs, our loss function is cross-entropy,
 and we minimize it via minibatch stochastic gradient descent.
 
 ```{.python .input}
-%%tab pytorch, mxnet
+%%tab pytorch, mxnet, jax
 trainer = d2l.Trainer(max_epochs=10, num_gpus=1)
 data = d2l.FashionMNIST(batch_size=128)
 model = LeNet(lr=0.1)

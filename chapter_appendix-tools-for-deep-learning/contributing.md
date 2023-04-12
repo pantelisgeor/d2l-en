@@ -17,10 +17,11 @@ After you are done, fill in your change descriptions in the "Propose file change
 
 If you plan to update a large portion of text or code, then you need to know a little bit more about the format this book is using. The source file is based on the [markdown format](https://daringfireball.net/projects/markdown/syntax) with a set of extensions through the [d2lbook](http://book.d2l.ai/user/markdown.html) package such as referring to equations, images, chapters, and citations. You can use any markdown editors to open these files and make your changes.
 
-If you would like to change the code, we recommend you to use the Jupyter Notebook to open these markdown files as described in :numref:`sec_jupyter`. So that you can run and test your changes. Please remember to clear all outputs before submitting your changes, our CI system will execute the sections you updated to generate outputs.
+If you would like to change the code, we recommend you to use the Jupyter Notebook to open these markdown files as described in :numref:`sec_jupyter`, so that you can run and test your changes. Please remember to clear all outputs before submitting your changes because our CI system will execute the sections you updated to generate outputs.
 
 Some sections may support multiple framework implementations.
-If you add a new code block not for the default implementation, which is MXNet, please use `#@tab` to mark this block on the beginning line. For example, `#@tab pytorch` for a PyTorch code block, `#@tab tensorflow` for a TensorFlow code block, or `#@tab all` a shared code block for all implementations. You may refer to the [`d2lbook`](http://book.d2l.ai/user/code_tabs.html) package for more information.
+If you add a new code block, please use `%%tab` to mark this block on the beginning line. For example,
+`%%tab pytorch` for a PyTorch code block, `%%tab tensorflow` for a TensorFlow code block, or `%%tab all` a shared code block for all implementations. You may refer to the [`d2lbook`](http://book.d2l.ai/user/code_tabs.html) package for more information.
 
 ## Submitting Major Changes
 
@@ -66,10 +67,10 @@ git clone https://github.com/your_github_username/d2l-en.git
 
 ### Editing and Pushing
 
-Now it is time to edit the book. It is best to edit it in the Jupyter Notebook following instructions in :numref:`sec_jupyter`. Make the changes and check that they are OK. Assume that we have modified a typo in the file `~/d2l-en/chapter_appendix_tools/how-to-contribute.md`.
+Now it is time to edit the book. It is best to edit it in the Jupyter Notebook following instructions in :numref:`sec_jupyter`. Make the changes and check that they are OK. Assume that we have modified a typo in the file `~/d2l-en/chapter_appendix-tools-for-deep-learning/contributing.md`.
 You can then check which files you have changed.
 
-At this point Git will prompt that the `chapter_appendix_tools/how-to-contribute.md` file has been modified.
+At this point Git will prompt that the `chapter_appendix-tools-for-deep-learning/contributing.md` file has been modified.
 
 ```
 mylaptop:d2l-en me$ git status
@@ -80,15 +81,15 @@ Changes not staged for commit:
   (use "git add <file>..." to update what will be committed)
   (use "git checkout -- <file>..." to discard changes in working directory)
 
-	modified:   chapter_appendix_tools/how-to-contribute.md
+	modified:   chapter_appendix-tools-for-deep-learning/contributing.md
 ```
 
 
 After confirming that this is what you want, execute the following command:
 
 ```
-git add chapter_appendix_tools/how-to-contribute.md
-git commit -m 'fix typo in git documentation'
+git add chapter_appendix-tools-for-deep-learning/contributing.md
+git commit -m 'Fix a typo in git documentation'
 git push
 ```
 

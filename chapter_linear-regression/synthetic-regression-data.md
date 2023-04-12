@@ -1,6 +1,6 @@
 ```{.python .input}
 %load_ext d2lbook.tab
-tab.interact_select(['mxnet', 'pytorch', 'tensorflow'])
+tab.interact_select(['mxnet', 'pytorch', 'tensorflow', 'jax'])
 ```
 
 # Synthetic Regression Data
@@ -42,6 +42,18 @@ import tensorflow as tf
 import random
 ```
 
+```{.python .input}
+%%tab jax
+%matplotlib inline
+from d2l import jax as d2l
+import jax
+from jax import numpy as jnp
+import numpy as np
+import random
+import tensorflow as tf
+import tensorflow_datasets as tfds
+```
+
 ## Generating the Dataset
 
 For this example, we will work low-dimensional
@@ -63,13 +75,14 @@ from a normal distribution with mean $\mu= 0$
 and standard deviation $\sigma = 0.01$.
 Note that for object-oriented design
 we add the code to the `__init__` method of a subclass of `d2l.DataModule` (introduced in :numref:`oo-design-data`). 
-It's good practice to allow setting any additional hyperparameters. 
+It is good practice to allow setting any additional hyperparameters. 
 We accomplish this with `save_hyperparameters()`. 
 The `batch_size` will be determined later on.
 
 ```{.python .input}
 %%tab all
 class SyntheticRegressionData(d2l.DataModule):  #@save
+    """Synthetic data for linear regression."""
     def __init__(self, w, b, noise=0.01, num_train=1000, num_val=1000, 
                  batch_size=32):
         super().__init__()
@@ -80,7 +93,12 @@ class SyntheticRegressionData(d2l.DataModule):  #@save
             noise = d2l.randn(n, 1) * noise
         if tab.selected('tensorflow'):
             self.X = tf.random.normal((n, w.shape[0]))
-            noise = tf.random.normal((n, 1)) * noise            
+            noise = tf.random.normal((n, 1)) * noise
+        if tab.selected('jax'):
+            key = jax.random.PRNGKey(0)
+            key1, key2 = jax.random.split(key)
+            self.X = jax.random.normal(key1, (n, w.shape[0]))
+            noise = jax.random.normal(key2, (n, 1)) * noise
         self.y = d2l.matmul(self.X, d2l.reshape(w, (-1, 1))) + b + noise
 ```
 
@@ -105,8 +123,8 @@ Training machine learning models often requires multiple passes over a dataset,
 grabbing one minibatch of examples at a time. 
 This data is then used to update the model. 
 To illustrate how this works, we 
-[**implement the `get_dataloader` function,**] 
-registering it as a method in the `SyntheticRegressionData` class via `add_to_class` (introduced in :numref:`oo-design-utilities`).
+[**implement the `get_dataloader` method,**] 
+registering it in the `SyntheticRegressionData` class via `add_to_class` (introduced in :numref:`oo-design-utilities`).
 It (**takes a batch size, a matrix of features,
 and a vector of labels, and generates minibatches of size `batch_size`.**)
 As such, each minibatch consists of a tuple of features and labels. 
@@ -126,7 +144,7 @@ def get_dataloader(self, train):
     else:
         indices = list(range(self.num_train, self.num_train+self.num_val))
     for i in range(0, len(indices), self.batch_size):
-        if tab.selected('mxnet') or tab.selected('pytorch'):
+        if tab.selected('mxnet', 'pytorch', 'jax'):
             batch_indices = d2l.tensor(indices[i: i+self.batch_size])
             yield self.X[batch_indices], self.y[batch_indices]
         if tab.selected('tensorflow'):
@@ -163,7 +181,7 @@ are considerably more efficient and they can deal
 with sources such as data stored in files, 
 data received via a stream, 
 and data generated or processed on the fly. 
-Next let's try to implement the same function using built-in iterators.
+Next let's try to implement the same method using built-in iterators.
 
 ## Concise Implementation of the Data Loader
 
@@ -172,6 +190,14 @@ we can [**call the existing API in a framework to load data.**]
 As before, we need a dataset with features `X` and labels `y`. 
 Beyond that, we set `batch_size` in the built-in data loader 
 and let it take care of shuffling examples  efficiently.
+
+:begin_tab:`jax`
+JAX is all about NumPy like API with device acceleration and the functional
+transformations, so at least the current version doesn’t include data loading
+methods. With other  libraries we already have great data loaders out there,
+and JAX suggests using them instead. Here we will grab TensorFlow’s data loader,
+and modify it slightly to make it work with JAX.
+:end_tab:
 
 ```{.python .input}
 %%tab all
@@ -186,11 +212,22 @@ def get_tensorloader(self, tensors, train, indices=slice(0, None)):
         dataset = torch.utils.data.TensorDataset(*tensors)
         return torch.utils.data.DataLoader(dataset, self.batch_size,
                                            shuffle=train)
+    if tab.selected('jax'):
+        # Use Tensorflow Datasets & Dataloader. JAX or Flax do not provide
+        # any dataloading functionality
+        shuffle_buffer = tensors[0].shape[0] if train else 1
+        return tfds.as_numpy(
+            tf.data.Dataset.from_tensor_slices(tensors).shuffle(
+                buffer_size=shuffle_buffer).batch(self.batch_size))
+
     if tab.selected('tensorflow'):
         shuffle_buffer = tensors[0].shape[0] if train else 1
         return tf.data.Dataset.from_tensor_slices(tensors).shuffle(
             buffer_size=shuffle_buffer).batch(self.batch_size)
+```
 
+```{.python .input}
+%%tab all
 @d2l.add_to_class(SyntheticRegressionData)  #@save
 def get_dataloader(self, train):
     i = slice(0, self.num_train) if train else slice(self.num_train, None)
@@ -245,7 +282,7 @@ We will put this to good use in the next section.
     1. What happens if we cannot hold all data in memory?
     1. How would you shuffle the data if data is held on disk? Your task is to design an *efficient* algorithm that does not require too many random reads or writes. Hint: [pseudorandom permutation generators](https://en.wikipedia.org/wiki/Pseudorandom_permutation) allow you to design a reshuffle without the need to store the permutation table explicitly :cite:`Naor.Reingold.1999`. 
 1. Implement a data generator that produces new data on the fly, every time the iterator is called. 
-1. How would you design a random data generator that generates *the same* data each time it's called?
+1. How would you design a random data generator that generates *the same* data each time it is called?
 
 
 :begin_tab:`mxnet`

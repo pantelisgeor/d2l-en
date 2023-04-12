@@ -7,7 +7,7 @@ Shortly after the first Elman-style RNNs were trained using backpropagation
 (owing to vanishing and exploding gradients)
 became salient, with Bengio and Hochreiter 
 discussing the problem
-:cite:`bengio1994learning` :cite:`Hochreiter.Bengio.Frasconi.ea.2001`.
+:cite:`bengio1994learning,Hochreiter.Bengio.Frasconi.ea.2001`.
 Hochreiter had articulated this problem as early 
 as in his 1991 masters thesis, although the results 
 were not widely known because the thesis was written in German.
@@ -40,7 +40,39 @@ built from simpler nodes
 in a specific connectivity pattern,
 with the novel inclusion of multiplicative nodes.
 
+```{.python .input}
+%load_ext d2lbook.tab
+tab.interact_select(['mxnet', 'pytorch', 'tensorflow', 'jax'])
+```
 
+```{.python .input}
+%%tab mxnet
+from d2l import mxnet as d2l
+from mxnet import np, npx
+from mxnet.gluon import rnn
+npx.set_np()
+```
+
+```{.python .input}
+%%tab pytorch
+from d2l import torch as d2l
+import torch
+from torch import nn
+```
+
+```{.python .input}
+%%tab tensorflow
+from d2l import tensorflow as d2l
+import tensorflow as tf
+```
+
+```{.python .input}
+%%tab jax
+from d2l import jax as d2l
+from flax import linen as nn
+import jax
+from jax import numpy as jnp
+```
 
 ## Gated Memory Cell
 
@@ -213,32 +245,6 @@ Now let's implement an LSTM from scratch.
 As same as the experiments in :numref:`sec_rnn-scratch`,
 we first load *The Time Machine* dataset.
 
-```{.python .input}
-%load_ext d2lbook.tab
-tab.interact_select('mxnet', 'pytorch', 'tensorflow')
-```
-
-```{.python .input}
-%%tab mxnet
-from d2l import mxnet as d2l
-from mxnet import np, npx
-from mxnet.gluon import rnn
-npx.set_np()
-```
-
-```{.python .input}
-%%tab pytorch
-from d2l import torch as d2l
-import torch
-from torch import nn
-```
-
-```{.python .input}
-%%tab tensorflow
-from d2l import tensorflow as d2l
-import tensorflow as tf
-```
-
 ### [**Initializing Model Parameters**]
 
 Next, we need to define and initialize the model parameters. 
@@ -249,8 +255,8 @@ with 0.01 standard deviation,
 and we set the biases to 0.
 
 ```{.python .input}
-%%tab all
-class LSTMScratch(d2l.Module):  #@save
+%%tab pytorch, mxnet, tensorflow
+class LSTMScratch(d2l.Module):
     def __init__(self, num_inputs, num_hiddens, sigma=0.01):
         super().__init__()
         self.save_hyperparameters()
@@ -277,21 +283,72 @@ class LSTMScratch(d2l.Module):  #@save
         self.W_xc, self.W_hc, self.b_c = triple()  # Input node
 ```
 
+```{.python .input}
+%%tab jax
+class LSTMScratch(d2l.Module):
+    num_inputs: int
+    num_hiddens: int
+    sigma: float = 0.01
+
+    def setup(self):
+        init_weight = lambda name, shape: self.param(name,
+                                                     nn.initializers.normal(self.sigma),
+                                                     shape)
+        triple = lambda name : (
+            init_weight(f'W_x{name}', (self.num_inputs, self.num_hiddens)),
+            init_weight(f'W_h{name}', (self.num_hiddens, self.num_hiddens)),
+            self.param(f'b_{name}', nn.initializers.zeros, (self.num_hiddens)))
+
+        self.W_xi, self.W_hi, self.b_i = triple('i')  # Input gate
+        self.W_xf, self.W_hf, self.b_f = triple('f')  # Forget gate
+        self.W_xo, self.W_ho, self.b_o = triple('o')  # Output gate
+        self.W_xc, self.W_hc, self.b_c = triple('c')  # Input node
+```
+
+:begin_tab:`pytorch, mxnet, tensorflow`
 [**The actual model**] is defined as described above,
 consisting of three gates and an input node. 
 Note that only the hidden state is passed to the output layer.
+:end_tab:
+
+:begin_tab:`jax`
+[**The actual model**] is defined as described above,
+consisting of three gates and an input node. 
+Note that only the hidden state is passed to the output layer.
+A long for-loop in the `forward` method will result in an extremely long
+JIT compilation time for the first run. As a solution to this, instead
+of using a for-loop to update the state with every time step,
+JAX has `jax.lax.scan` utility transformation to achieve the same behavior.
+It takes in an initial state called `carry` and an `inputs` array which
+is scanned on its leading axis. The `scan` transformation ultimately
+returns the final state and the stacked outputs as expected.
+:end_tab:
 
 ```{.python .input}
-%%tab all
+%%tab pytorch, mxnet, tensorflow
 @d2l.add_to_class(LSTMScratch)
 def forward(self, inputs, H_C=None):
-    H, C = None, None if H_C is None else H_C
+    if H_C is None:
+        # Initial state with shape: (batch_size, num_hiddens)
+        if tab.selected('mxnet'):
+            H = d2l.zeros((inputs.shape[1], self.num_hiddens),
+                          ctx=inputs.ctx)
+            C = d2l.zeros((inputs.shape[1], self.num_hiddens),
+                          ctx=inputs.ctx)
+        if tab.selected('pytorch'):
+            H = d2l.zeros((inputs.shape[1], self.num_hiddens),
+                          device=inputs.device)
+            C = d2l.zeros((inputs.shape[1], self.num_hiddens),
+                          device=inputs.device)
+        if tab.selected('tensorflow'):
+            H = d2l.zeros((inputs.shape[1], self.num_hiddens))
+            C = d2l.zeros((inputs.shape[1], self.num_hiddens))
+    else:
+        H, C = H_C
     outputs = []
     for X in inputs:
-        I = d2l.sigmoid(d2l.matmul(X, self.W_xi) + (
-            d2l.matmul(H, self.W_hi) if H is not None else 0) + self.b_i)
-        if H is None:
-            H, C = d2l.zeros_like(I), d2l.zeros_like(I)
+        I = d2l.sigmoid(d2l.matmul(X, self.W_xi) +
+                        d2l.matmul(H, self.W_hi) + self.b_i)
         F = d2l.sigmoid(d2l.matmul(X, self.W_xf) +
                         d2l.matmul(H, self.W_hf) + self.b_f)
         O = d2l.sigmoid(d2l.matmul(X, self.W_xo) +
@@ -304,6 +361,38 @@ def forward(self, inputs, H_C=None):
     return outputs, (H, C)
 ```
 
+```{.python .input}
+%%tab jax
+@d2l.add_to_class(LSTMScratch)
+def forward(self, inputs, H_C=None):
+    # Use lax.scan primitive instead of looping over the
+    # inputs, since scan saves time in jit compilation.
+    def scan_fn(carry, X):
+        H, C = carry
+        I = d2l.sigmoid(d2l.matmul(X, self.W_xi) + (
+            d2l.matmul(H, self.W_hi)) + self.b_i)
+        F = d2l.sigmoid(d2l.matmul(X, self.W_xf) +
+                        d2l.matmul(H, self.W_hf) + self.b_f)
+        O = d2l.sigmoid(d2l.matmul(X, self.W_xo) +
+                        d2l.matmul(H, self.W_ho) + self.b_o)
+        C_tilde = d2l.tanh(d2l.matmul(X, self.W_xc) +
+                           d2l.matmul(H, self.W_hc) + self.b_c)
+        C = F * C + I * C_tilde
+        H = O * d2l.tanh(C)
+        return (H, C), H  # return carry, y
+
+    if H_C is None:
+        batch_size = inputs.shape[1]
+        carry = jnp.zeros((batch_size, self.num_hiddens)), \
+                jnp.zeros((batch_size, self.num_hiddens))
+    else:
+        carry = H_C
+
+    # scan takes the scan_fn, initial carry state, xs with leading axis to be scanned
+    carry, outputs = jax.lax.scan(scan_fn, carry, inputs)
+    return outputs, carry
+```
+
 ### [**Training**] and Prediction
 
 Let's train an LSTM model by instantiating the `RNNLMScratch` class as introduced in :numref:`sec_rnn-scratch`.
@@ -311,7 +400,7 @@ Let's train an LSTM model by instantiating the `RNNLMScratch` class as introduce
 ```{.python .input}
 %%tab all
 data = d2l.TimeMachine(batch_size=1024, num_steps=32)
-if tab.selected('mxnet', 'pytorch'):
+if tab.selected('mxnet', 'pytorch', 'jax'):
     lstm = LSTMScratch(num_inputs=len(data.vocab), num_hiddens=32)
     model = d2l.RNNLMScratch(lstm, vocab_size=len(data.vocab), lr=4)
     trainer = d2l.Trainer(max_epochs=50, gradient_clip_val=1, num_gpus=1)
@@ -375,12 +464,32 @@ class LSTM(d2l.RNN):
 ```
 
 ```{.python .input}
+%%tab jax
+class LSTM(d2l.RNN):
+    num_hiddens: int
+
+    @nn.compact
+    def __call__(self, inputs, H_C=None, training=False):
+        if H_C is None:
+            batch_size = inputs.shape[1]
+            H_C = nn.OptimizedLSTMCell.initialize_carry(jax.random.PRNGKey(0),
+                                                        (batch_size,),
+                                                        self.num_hiddens)
+
+        LSTM = nn.scan(nn.OptimizedLSTMCell, variable_broadcast="params",
+                       in_axes=0, out_axes=0, split_rngs={"params": False})
+
+        H_C, outputs = LSTM()(H_C, inputs)
+        return outputs, H_C
+```
+
+```{.python .input}
 %%tab all
 if tab.selected('pytorch'):
     lstm = LSTM(num_inputs=len(data.vocab), num_hiddens=32)
-if tab.selected('mxnet', 'tensorflow'):
+if tab.selected('mxnet', 'tensorflow', 'jax'):
     lstm = LSTM(num_hiddens=32)
-if tab.selected('mxnet', 'pytorch'):
+if tab.selected('mxnet', 'pytorch', 'jax'):
     model = d2l.RNNLM(lstm, vocab_size=len(data.vocab), lr=4)
 if tab.selected('tensorflow'):
     with d2l.try_gpu():
@@ -396,6 +505,11 @@ model.predict('it has', 20, data.vocab, d2l.try_gpu())
 ```{.python .input}
 %%tab tensorflow
 model.predict('it has', 20, data.vocab)
+```
+
+```{.python .input}
+%%tab jax
+model.predict('it has', 20, data.vocab, trainer.state.params)
 ```
 
 LSTMs are the prototypical latent variable autoregressive model with nontrivial state control.

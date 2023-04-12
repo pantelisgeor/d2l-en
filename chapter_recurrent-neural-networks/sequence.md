@@ -1,9 +1,7 @@
 # Working with Sequences
 :label:`sec_sequence`
 
-
-
-Up until now, we've focused on models whose inputs
+Up until now, we have focused on models whose inputs
 consisted of a single feature vector $\mathbf{x} \in \mathbb{R}^d$.
 The main change of perspective when developing models
 capable of processing sequences is that we now
@@ -46,8 +44,8 @@ depends heavily on what transpired
 in the previous nine days.
 
 This should come as no surprise.
-If we didn't believe that the elements in a sequence were related,
-we wouldn't have bothered to model them as a sequence in the first place.
+If we did not believe that the elements in a sequence were related,
+we would not have bothered to model them as a sequence in the first place.
 Consider the usefulness of the auto-fill features
 that are popular on search tools and modern email clients.
 They are useful precisely because it is often possible
@@ -55,7 +53,7 @@ to predict (imperfectly, but better than random guessing)
 what likely continuations of a sequence might be,
 given some initial prefix.
 For most sequence models,
-we don't require independence,
+we do not require independence,
 or even stationarity, of our sequences.
 Instead, we require only that
 the sequences themselves are sampled
@@ -96,6 +94,43 @@ our goal is to estimate the probability mass function
 that tells us how likely we are to see any given sequence,
 i.e., $p(\mathbf{x}_1, \ldots, \mathbf{x}_T)$.
 
+```{.python .input  n=6}
+%load_ext d2lbook.tab
+tab.interact_select('mxnet', 'pytorch', 'tensorflow', 'jax')
+```
+
+```{.python .input  n=7}
+%%tab mxnet
+%matplotlib inline
+from d2l import mxnet as d2l
+from mxnet import autograd, np, npx, gluon, init
+from mxnet.gluon import nn
+npx.set_np()
+```
+
+```{.python .input  n=8}
+%%tab pytorch
+%matplotlib inline
+from d2l import torch as d2l
+import torch
+from torch import nn
+```
+
+```{.python .input  n=9}
+%%tab tensorflow
+%matplotlib inline
+from d2l import tensorflow as d2l
+import tensorflow as tf
+```
+
+```{.python .input  n=9}
+%%tab jax
+%matplotlib inline
+from d2l import jax as d2l
+import jax
+from jax import numpy as jnp
+import numpy as np
+```
 
 ## Autoregressive Models
 
@@ -161,7 +196,8 @@ $P(x_t \mid x_{t-1}, \ldots, x_1)$
 or some statistic(s) of this distribution.
 
 A few strategies recur frequently.
-First, we might believe that although long sequences
+First of all,
+we might believe that although long sequences
 $x_{t-1}, \ldots, x_1$ are available,
 it may not be necessary
 to look back so far in the history
@@ -356,35 +392,6 @@ Before we focus our attention on text data,
 let's first try this out with some
 continuous-valued synthetic data.
 
-```{.python .input  n=6}
-%load_ext d2lbook.tab
-tab.interact_select('mxnet', 'pytorch', 'tensorflow')
-```
-
-```{.python .input  n=7}
-%%tab mxnet
-%matplotlib inline
-from d2l import mxnet as d2l
-from mxnet import autograd, np, npx, gluon, init
-from mxnet.gluon import nn
-npx.set_np()
-```
-
-```{.python .input  n=8}
-%%tab pytorch
-%matplotlib inline
-from d2l import torch as d2l
-import torch
-from torch import nn
-```
-
-```{.python .input  n=9}
-%%tab tensorflow
-%matplotlib inline
-from d2l import tensorflow as d2l
-import tensorflow as tf
-```
-
 (**Here, our 1000 synthetic data will follow
 the trigonometric `sin` function,
 applied to 0.01 times the time step.
@@ -403,7 +410,14 @@ class Data(d2l.DataModule):
             self.x = d2l.sin(0.01 * self.time) + d2l.randn(T) * 0.2
         if tab.selected('tensorflow'):
             self.x = d2l.sin(0.01 * self.time) + d2l.normal([T]) * 0.2
+        if tab.selected('jax'):
+            key = d2l.get_key()
+            self.x = d2l.sin(0.01 * self.time) + jax.random.normal(key,
+                                                                   [T]) * 0.2
+```
 
+```{.python .input}
+%%tab all
 data = Data()
 d2l.plot(data.time, data.x, 'time', 'x', xlim=[1, 1000], figsize=(6, 3))
 ```
@@ -450,8 +464,15 @@ trainer.fit(model, data)
 how well our model performs at one-step-ahead prediction**].
 
 ```{.python .input}
-%%tab all
+%%tab pytorch, mxnet, tensorflow
 onestep_preds = d2l.numpy(model(data.features))
+d2l.plot(data.time[data.tau:], [data.labels, onestep_preds], 'time', 'x',
+         legend=['labels', '1-step preds'], figsize=(6, 3))
+```
+
+```{.python .input}
+%%tab jax
+onestep_preds = model.apply({'params': trainer.state.params}, data.features)
 d2l.plot(data.time[data.tau:], [data.labels, onestep_preds], 'time', 'x',
          legend=['labels', '1-step preds'], figsize=(6, 3))
 ```
@@ -512,6 +533,16 @@ for i in range(data.num_train + data.tau, data.T):
 ```
 
 ```{.python .input}
+%%tab jax
+multistep_preds = d2l.zeros(data.T)
+multistep_preds = multistep_preds.at[:].set(data.x)
+for i in range(data.num_train + data.tau, data.T):
+    pred = model.apply({'params': trainer.state.params},
+                       d2l.reshape(multistep_preds[i-data.tau : i], (1, -1)))
+    multistep_preds = multistep_preds.at[i].set(pred.item())
+```
+
+```{.python .input}
 %%tab all
 d2l.plot([data.time[data.tau:], data.time[data.num_train+data.tau:]],
          [onestep_preds, multistep_preds[data.num_train+data.tau:]], 'time',
@@ -544,7 +575,7 @@ Let's [**take a closer look at the difficulties in $k$-step-ahead predictions**]
 by computing predictions on the entire sequence for $k = 1, 4, 16, 64$.
 
 ```{.python .input}
-%%tab all
+%%tab pytorch, mxnet, tensorflow
 def k_step_pred(k):
     features = []
     for i in range(data.tau):
@@ -552,6 +583,20 @@ def k_step_pred(k):
     # The (i+tau)-th element stores the (i+1)-step-ahead predictions
     for i in range(k):
         preds = model(d2l.stack(features[i : i+data.tau], 1))
+        features.append(d2l.reshape(preds, -1))
+    return features[data.tau:]
+```
+
+```{.python .input}
+%%tab jax
+def k_step_pred(k):
+    features = []
+    for i in range(data.tau):
+        features.append(data.x[i : i+data.T-data.tau-k+1])
+    # The (i+tau)-th element stores the (i+1)-step-ahead predictions
+    for i in range(k):
+        preds = model.apply({'params': trainer.state.params},
+                            d2l.stack(features[i : i+data.tau], 1))
         features.append(d2l.reshape(preds, -1))
     return features[data.tau:]
 ```

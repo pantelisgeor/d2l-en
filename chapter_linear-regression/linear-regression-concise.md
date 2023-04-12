@@ -1,6 +1,6 @@
 ```{.python .input  n=1}
 %load_ext d2lbook.tab
-tab.interact_select(['mxnet', 'pytorch', 'tensorflow'])
+tab.interact_select(['mxnet', 'pytorch', 'tensorflow', 'jax'])
 ```
 
 # Concise Implementation of Linear Regression
@@ -45,7 +45,7 @@ from mxnet.gluon import nn
 npx.set_np()
 ```
 
-```{.python .input  n=1}
+```{.python .input}
 %%tab pytorch
 from d2l import torch as d2l
 import numpy as np
@@ -53,11 +53,20 @@ import torch
 from torch import nn
 ```
 
-```{.python .input  n=1}
+```{.python .input}
 %%tab tensorflow
 from d2l import tensorflow as d2l
 import numpy as np
 import tensorflow as tf
+```
+
+```{.python .input}
+%%tab jax
+from d2l import jax as d2l
+from flax import linen as nn
+import jax
+from jax import numpy as jnp
+import optax
 ```
 
 ## Defining the Model
@@ -95,7 +104,7 @@ we set that number to 1.
 It is worth noting that, for convenience,
 Gluon does not require us to specify
 the input shape for each layer.
-Hence we don't need to tell Gluon
+Hence we do not need to tell Gluon
 how many inputs go into this linear layer.
 When we first pass data through our model,
 e.g., when we execute `net(X)` later,
@@ -126,7 +135,7 @@ we set that number to 1.
 It is worth noting that, for convenience,
 Keras does not require us to specify
 the input shape for each layer.
-We don't need to tell Keras
+We do not need to tell Keras
 how many inputs go into this linear layer.
 When we first try to pass data through our model,
 e.g., when we execute `net(X)` later,
@@ -136,8 +145,9 @@ We will describe how this works in more detail later.
 :end_tab:
 
 ```{.python .input}
-%%tab all
+%%tab pytorch, mxnet, tensorflow
 class LinearRegression(d2l.Module):  #@save
+    """The linear regression model implemented with high-level APIs."""
     def __init__(self, lr):
         super().__init__()
         self.save_hyperparameters()
@@ -153,13 +163,29 @@ class LinearRegression(d2l.Module):  #@save
             self.net.bias.data.fill_(0)
 ```
 
-In the `forward` method, we just invoke the built-in `__call__` function of the predefined layers to compute the outputs.
+```{.python .input}
+%%tab jax
+class LinearRegression(d2l.Module):  #@save
+    """The linear regression model implemented with high-level APIs."""
+    lr: float
 
-```{.python .input  n=3}
-%%tab all
+    def setup(self):
+        self.net = nn.Dense(1, kernel_init=nn.initializers.normal(0.01))
+```
+
+In the `forward` method, we just invoke the built-in `__call__` method of the predefined layers to compute the outputs.
+
+```{.python .input}
+%%tab pytorch, mxnet, tensorflow
 @d2l.add_to_class(LinearRegression)  #@save
 def forward(self, X):
-    """The linear regression model."""
+    return self.net(X)
+```
+
+```{.python .input}
+%%tab jax
+@d2l.add_to_class(LinearRegression)  #@save
+def forward(self, X):
     return self.net(X)
 ```
 
@@ -185,8 +211,8 @@ The `MeanSquaredError` class computes the mean squared error (without the $1/2$ 
 By default, it returns the average loss over examples.
 :end_tab:
 
-```{.python .input  n=3}
-%%tab all
+```{.python .input}
+%%tab pytorch, mxnet, tensorflow
 @d2l.add_to_class(LinearRegression)  #@save
 def loss(self, y_hat, y):
     if tab.selected('mxnet'):
@@ -200,6 +226,14 @@ def loss(self, y_hat, y):
         return fn(y, y_hat)
 ```
 
+```{.python .input}
+%%tab jax
+@d2l.add_to_class(LinearRegression)  #@save
+def loss(self, params, X, y, state):
+    y_hat = state.apply_fn({'params': params}, *X)
+    return d2l.reduce_mean(optax.l2_loss(y_hat, y))
+```
+
 ## Defining the Optimization Algorithm
 
 :begin_tab:`mxnet`
@@ -210,7 +244,7 @@ variations on this algorithm through its `Trainer` class.
 Note that Gluon's `Trainer` class stands
 for the optimization algorithm,
 while the `Trainer` class we created in :numref:`sec_oo-design`
-contains the training function,
+contains the training method,
 i.e., repeatedly call the optimizer
 to update the model parameters.
 When we instantiate `Trainer`,
@@ -240,7 +274,7 @@ and thus Keras supports it alongside a number of
 variations on this algorithm in the `optimizers` module.
 :end_tab:
 
-```{.python .input  n=5}
+```{.python .input}
 %%tab all
 @d2l.add_to_class(LinearRegression)  #@save
 def configure_optimizers(self):
@@ -251,6 +285,8 @@ def configure_optimizers(self):
         return torch.optim.SGD(self.parameters(), self.lr)
     if tab.selected('tensorflow'):
         return tf.keras.optimizers.SGD(self.lr)
+    if tab.selected('jax'):
+        return optax.sgd(self.lr)
 ```
 
 ## Training
@@ -291,7 +327,7 @@ note that our estimated parameters
 are close to their true counterparts.
 
 ```{.python .input}
-%%tab all
+%%tab pytorch, mxnet, tensorflow
 @d2l.add_to_class(LinearRegression)  #@save
 def get_w_b(self):
     if tab.selected('mxnet'):
@@ -302,6 +338,19 @@ def get_w_b(self):
         return (self.get_weights()[0], self.get_weights()[1])
 
 w, b = model.get_w_b()
+```
+
+```{.python .input}
+%%tab jax
+@d2l.add_to_class(LinearRegression)  #@save
+def get_w_b(self, state):
+    net = state.params['net']
+    return net['kernel'], net['bias']
+
+w, b = model.get_w_b(trainer.state)
+```
+
+```{.python .input}
 print(f'error in estimating w: {data.w - d2l.reshape(w, data.w.shape)}')
 print(f'error in estimating b: {data.b - b}')
 ```
@@ -312,14 +361,14 @@ This section contains the first
 implementation of a deep network (in this book)
 to tap into the conveniences afforded
 by modern deep learning frameworks,
-such as Gluon `Chen.Li.Li.ea.2015`, 
+such as MXNet :cite:`Chen.Li.Li.ea.2015`, 
 JAX :cite:`Frostig.Johnson.Leary.2018`, 
 PyTorch :cite:`Paszke.Gross.Massa.ea.2019`, 
 and Tensorflow :cite:`Abadi.Barham.Chen.ea.2016`.
 We used framework defaults for loading data, defining a layer,
 a loss function, an optimizer and a training loop.
 Whenever the framework provides all necessary features,
-it's generally a good idea to use them,
+it is generally a good idea to use them,
 since the library implementations of these components
 tend to be heavily optimized for performance
 and properly tested for reliability.

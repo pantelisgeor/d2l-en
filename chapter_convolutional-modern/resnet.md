@@ -1,6 +1,6 @@
 ```{.python .input}
 %load_ext d2lbook.tab
-tab.interact_select(['mxnet', 'pytorch', 'tensorflow'])
+tab.interact_select(['mxnet', 'pytorch', 'tensorflow', 'jax'])
 ```
 
 # Residual Networks (ResNet) and ResNeXt
@@ -10,6 +10,35 @@ As we design increasingly deeper networks it becomes imperative to understand ho
 Even more important is the ability to design networks where adding layers makes networks strictly more expressive rather than just different.
 To make some progress we need a bit of mathematics.
 
+```{.python .input}
+%%tab mxnet
+from d2l import mxnet as d2l
+from mxnet import np, npx, init
+from mxnet.gluon import nn
+npx.set_np()
+```
+
+```{.python .input}
+%%tab pytorch
+from d2l import torch as d2l
+import torch
+from torch import nn
+from torch.nn import functional as F
+```
+
+```{.python .input}
+%%tab tensorflow
+import tensorflow as tf
+from d2l import tensorflow as d2l
+```
+
+```{.python .input}
+%%tab jax
+from d2l import jax as d2l
+from flax import linen as nn
+from jax import numpy as jnp
+import jax
+```
 
 ## Function Classes
 
@@ -48,7 +77,7 @@ For deep neural networks,
 if we can
 train the newly-added layer into an identity function $f(\mathbf{x}) = \mathbf{x}$, the new model will be as effective as the original model. As the new model may get a better solution to fit the training dataset, the added layer might make it easier to reduce training errors.
 
-This is the question that :cite:`He.Zhang.Ren.ea.2016` considered when working on very deep computer vision models.
+This is the question that :citet:`He.Zhang.Ren.ea.2016` considered when working on very deep computer vision models.
 At the heart of their proposed *residual network* (*ResNet*) is the idea that every additional layer should
 more easily
 contain the identity function as one of its elements.
@@ -101,13 +130,8 @@ This kind of design requires that the output of the two convolutional layers has
 
 ```{.python .input}
 %%tab mxnet
-from d2l import mxnet as d2l
-from mxnet import np, npx, init
-from mxnet.gluon import nn
-npx.set_np()
-
 class Residual(nn.Block):  #@save
-    """The Residual block of ResNet."""
+    """The Residual block of ResNet models."""
     def __init__(self, num_channels, use_1x1conv=False, strides=1, **kwargs):
         super().__init__(**kwargs)
         self.conv1 = nn.Conv2D(num_channels, kernel_size=3, padding=1,
@@ -131,13 +155,8 @@ class Residual(nn.Block):  #@save
 
 ```{.python .input}
 %%tab pytorch
-from d2l import torch as d2l
-import torch
-from torch import nn
-from torch.nn import functional as F
-
 class Residual(nn.Module):  #@save
-    """The Residual block of ResNet."""
+    """The Residual block of ResNet models."""
     def __init__(self, num_channels, use_1x1conv=False, strides=1):
         super().__init__()
         self.conv1 = nn.LazyConv2d(num_channels, kernel_size=3, padding=1,
@@ -162,11 +181,8 @@ class Residual(nn.Module):  #@save
 
 ```{.python .input}
 %%tab tensorflow
-import tensorflow as tf
-from d2l import tensorflow as d2l
-
 class Residual(tf.keras.Model):  #@save
-    """The Residual block of ResNet."""
+    """The Residual block of ResNet models."""
     def __init__(self, num_channels, use_1x1conv=False, strides=1):
         super().__init__()
         self.conv1 = tf.keras.layers.Conv2D(num_channels, padding='same',
@@ -187,6 +203,37 @@ class Residual(tf.keras.Model):  #@save
             X = self.conv3(X)
         Y += X
         return tf.keras.activations.relu(Y)
+```
+
+```{.python .input}
+%%tab jax
+class Residual(nn.Module):  #@save
+    """The Residual block of ResNet models."""
+    num_channels: int
+    use_1x1conv: bool = False
+    strides: tuple = (1, 1)
+    training: bool = True
+
+    def setup(self):
+        self.conv1 = nn.Conv(self.num_channels, kernel_size=(3, 3),
+                             padding='same', strides=self.strides)
+        self.conv2 = nn.Conv(self.num_channels, kernel_size=(3, 3),
+                             padding='same')
+        if self.use_1x1conv:
+            self.conv3 = nn.Conv(self.num_channels, kernel_size=(1, 1),
+                                 strides=self.strides)
+        else:
+            self.conv3 = None
+        self.bn1 = nn.BatchNorm(not self.training)
+        self.bn2 = nn.BatchNorm(not self.training)
+
+    def __call__(self, X):
+        Y = nn.relu(self.bn1(self.conv1(X)))
+        Y = self.bn2(self.conv2(Y))
+        if self.conv3:
+            X = self.conv3(X)
+        Y += X
+        return nn.relu(Y)
 ```
 
 This code generates two types of networks: one where we add the input to the output before applying the ReLU nonlinearity whenever `use_1x1conv=False`, and one where we adjust channels and resolution by means of a $1 \times 1$ convolution before adding. :numref:`fig_resnet_block` illustrates this.
@@ -215,15 +262,28 @@ Y = blk(X)
 Y.shape
 ```
 
+```{.python .input}
+%%tab jax
+blk = Residual(3)
+X = jax.random.normal(d2l.get_key(), (4, 6, 6, 3))
+blk.init_with_output(d2l.get_key(), X)[0].shape
+```
+
 We also have the option to [**halve the output height and width while increasing the number of output channels**].
 In this case we use $1 \times 1$ convolutions via `use_1x1conv=True`. This comes in handy at the beginning of each ResNet block to reduce the spatial dimensionality via `strides=2`.
 
 ```{.python .input}
-%%tab all
+%%tab pytorch, mxnet, tensorflow
 blk = Residual(6, use_1x1conv=True, strides=2)
 if tab.selected('mxnet'):
     blk.initialize()
 blk(X).shape
+```
+
+```{.python .input}
+%%tab jax
+blk = Residual(6, use_1x1conv=True, strides=(2, 2))
+blk.init_with_output(d2l.get_key(), X)[0].shape
 ```
 
 ## [**ResNet Model**]
@@ -231,7 +291,7 @@ blk(X).shape
 The first two layers of ResNet are the same as those of the GoogLeNet we described before: the $7\times 7$ convolutional layer with 64 output channels and a stride of 2 is followed by the $3\times 3$ max-pooling layer with a stride of 2. The difference is the batch normalization layer added after each convolutional layer in ResNet.
 
 ```{.python .input}
-%%tab all
+%%tab pytorch, mxnet, tensorflow
 class ResNet(d2l.Classifier):
     def b1(self):
         if tab.selected('mxnet'):
@@ -253,6 +313,25 @@ class ResNet(d2l.Classifier):
                 tf.keras.layers.Activation('relu'),
                 tf.keras.layers.MaxPool2D(pool_size=3, strides=2,
                                           padding='same')])
+```
+
+```{.python .input}
+%%tab jax
+class ResNet(d2l.Classifier):
+    arch: tuple
+    lr: float = 0.1
+    num_classes: int = 10
+    training: bool = True
+
+    def setup(self):
+        self.net = self.create_net()
+
+    def b1(self):
+        return nn.Sequential([
+            nn.Conv(64, kernel_size=(7, 7), strides=(2, 2), padding='same'),
+            nn.BatchNorm(not self.training), nn.relu,
+            lambda x: nn.max_pool(x, window_shape=(3, 3), strides=(2, 2),
+                                  padding='same')])
 ```
 
 GoogLeNet uses four modules made up of Inception blocks.
@@ -298,10 +377,24 @@ def block(self, num_residuals, num_channels, first_block=False):
     return blk
 ```
 
+```{.python .input}
+%%tab jax
+@d2l.add_to_class(ResNet)
+def block(self, num_residuals, num_channels, first_block=False):
+    blk = []
+    for i in range(num_residuals):
+        if i == 0 and not first_block:
+            blk.append(Residual(num_channels, use_1x1conv=True,
+                                strides=(2, 2), training=self.training))
+        else:
+            blk.append(Residual(num_channels, training=self.training))
+    return nn.Sequential(blk)
+```
+
 Then, we add all the modules to ResNet. Here, two residual blocks are used for each module. Lastly, just like GoogLeNet, we add a global average pooling layer, followed by the fully connected layer output.
 
 ```{.python .input}
-%%tab all
+%%tab pytorch, mxnet, tensorflow
 @d2l.add_to_class(ResNet)
 def __init__(self, arch, lr=0.1, num_classes=10):
     super(ResNet, self).__init__()
@@ -330,6 +423,22 @@ def __init__(self, arch, lr=0.1, num_classes=10):
             tf.keras.layers.Dense(units=num_classes)]))
 ```
 
+```{.python .input}
+# %%tab jax
+@d2l.add_to_class(ResNet)
+def create_net(self):
+    net = nn.Sequential([self.b1()])
+    for i, b in enumerate(self.arch):
+        net.layers.extend([self.block(*b, first_block=(i==0))])
+    net.layers.extend([nn.Sequential([
+        # Flax does not provide a GlobalAvg2D layer
+        lambda x: nn.avg_pool(x, window_shape=x.shape[1:3],
+                              strides=x.shape[1:3], padding='valid'),
+        lambda x: x.reshape((x.shape[0], -1)),
+        nn.Dense(self.num_classes)])])
+    return net
+```
+
 There are 4 convolutional layers in each module (excluding the $1\times 1$ convolutional layer). Together with the first $7\times 7$ convolutional layer and the final fully connected layer, there are 18 layers in total. Therefore, this model is commonly known as ResNet-18.
 By configuring different numbers of channels and residual blocks in the module, we can create different ResNet models, such as the deeper 152-layer ResNet-152. Although the main architecture of ResNet is similar to that of GoogLeNet, ResNet's structure is simpler and easier to modify. All these factors have resulted in the rapid and widespread use of ResNet. :numref:`fig_resnet18` depicts the full ResNet-18.
 
@@ -339,11 +448,19 @@ By configuring different numbers of channels and residual blocks in the module, 
 Before training ResNet, let's [**observe how the input shape changes across different modules in ResNet**]. As in all the previous architectures, the resolution decreases while the number of channels increases up until the point where a global average pooling layer aggregates all features.
 
 ```{.python .input}
-%%tab all
+%%tab pytorch, mxnet, tensorflow
 class ResNet18(ResNet):
     def __init__(self, lr=0.1, num_classes=10):
         super().__init__(((2, 64), (2, 128), (2, 256), (2, 512)),
                        lr, num_classes)
+```
+
+```{.python .input}
+%%tab jax
+class ResNet18(ResNet):
+    arch: tuple = ((2, 64), (2, 128), (2, 256), (2, 512))
+    lr: float = 0.1
+    num_classes: int = 10
 ```
 
 ```{.python .input}
@@ -356,12 +473,17 @@ ResNet18().layer_summary((1, 1, 96, 96))
 ResNet18().layer_summary((1, 96, 96, 1))
 ```
 
+```{.python .input}
+%%tab jax
+ResNet18(training=False).layer_summary((1, 96, 96, 1))
+```
+
 ## [**Training**]
 
 We train ResNet on the Fashion-MNIST dataset, just like before. ResNet is quite a powerful and flexible architecture. The plot capturing training and validation loss illustrates a significant gap between both graphs, with the training loss being significantly lower. For a network of this flexibility, more training data would offer significant benefit in closing the gap and improving accuracy.
 
 ```{.python .input}
-%%tab mxnet, pytorch
+%%tab mxnet, pytorch, jax
 model = ResNet18(lr=0.01)
 trainer = d2l.Trainer(max_epochs=10, num_gpus=1)
 data = d2l.FashionMNIST(batch_size=128, resize=(96, 96))
@@ -500,6 +622,45 @@ class ResNeXtBlock(tf.keras.Model):  #@save
         return tf.keras.activations.relu(Y + X)
 ```
 
+```{.python .input}
+%%tab jax
+class ResNeXtBlock(nn.Module):  #@save
+    """The ResNeXt block."""
+    num_channels: int
+    groups: int
+    bot_mul: int
+    use_1x1conv: bool = False
+    strides: tuple = (1, 1)
+    training: bool = True
+
+    def setup(self):
+        bot_channels = int(round(self.num_channels * self.bot_mul))
+        self.conv1 = nn.Conv(bot_channels, kernel_size=(1, 1),
+                               strides=(1, 1))
+        self.conv2 = nn.Conv(bot_channels, kernel_size=(3, 3),
+                               strides=self.strides, padding='same',
+                               feature_group_count=bot_channels//self.groups)
+        self.conv3 = nn.Conv(self.num_channels, kernel_size=(1, 1),
+                               strides=(1, 1))
+        self.bn1 = nn.BatchNorm(not self.training)
+        self.bn2 = nn.BatchNorm(not self.training)
+        self.bn3 = nn.BatchNorm(not self.training)
+        if self.use_1x1conv:
+            self.conv4 = nn.Conv(self.num_channels, kernel_size=(1, 1),
+                                       strides=self.strides)
+            self.bn4 = nn.BatchNorm(not self.training)
+        else:
+            self.conv4 = None
+
+    def __call__(self, X):
+        Y = nn.relu(self.bn1(self.conv1(X)))
+        Y = nn.relu(self.bn2(self.conv2(Y)))
+        Y = self.bn3(self.conv3(Y))
+        if self.conv4:
+            X = self.bn4(self.conv4(X))
+        return nn.relu(Y + X)
+```
+
 Its use is entirely analogous to that of the `ResNetBlock` discussed previously. For instance, when using (`use_1x1conv=False, strides=1`), the input and output are of the same shape. Alternatively, setting `use_1x1conv=True, strides=2` halves the output height and width.
 
 ```{.python .input}
@@ -517,6 +678,13 @@ blk = ResNeXtBlock(32, 16, 1)
 X = d2l.normal((4, 96, 96, 32))
 Y = blk(X)
 Y.shape
+```
+
+```{.python .input}
+%%tab jax
+blk = ResNeXtBlock(32, 16, 1)
+X = jnp.zeros((4, 96, 96, 32))
+blk.init_with_output(d2l.get_key(), X)[0].shape
 ```
 
 ## Summary and Discussion

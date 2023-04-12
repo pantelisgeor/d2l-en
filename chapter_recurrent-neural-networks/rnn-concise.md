@@ -6,7 +6,7 @@ Like most of our from-scratch implementations,
 to provide insight into how each component works.
 But when you're using RNNs every day 
 or writing production code,
-you'll want to rely more on libraries
+you will want to rely more on libraries
 that cut down on both implementation time 
 (by supplying library code for common models and functions)
 and computation time 
@@ -20,7 +20,7 @@ We begin, as before, by loading
 
 ```{.python .input}
 %load_ext d2lbook.tab
-tab.interact_select('mxnet', 'pytorch', 'tensorflow')
+tab.interact_select('mxnet', 'pytorch', 'tensorflow', 'jax')
 ```
 
 ```{.python .input}
@@ -45,6 +45,13 @@ from d2l import tensorflow as d2l
 import tensorflow as tf
 ```
 
+```{.python .input}
+%%tab jax
+from d2l import jax as d2l
+from flax import linen as nn
+from jax import numpy as jnp
+```
+
 ## [**Defining the Model**]
 
 We define the following class
@@ -64,9 +71,16 @@ For some models to be introduced later
 this list will also contain other information.
 :end_tab:
 
+:begin_tab:`jax`
+Flax does not provide an RNNCell for concise implementation of Vanilla RNNs
+as of today. There are more advanced variants of RNNs like LSTMs and GRUs
+which are available in the Flax `linen` API.
+:end_tab:
+
 ```{.python .input}
 %%tab mxnet
 class RNN(d2l.Module):  #@save
+    """The RNN model implemented with high-level APIs."""
     def __init__(self, num_hiddens):
         super().__init__()
         self.save_hyperparameters()        
@@ -82,6 +96,7 @@ class RNN(d2l.Module):  #@save
 ```{.python .input}
 %%tab pytorch
 class RNN(d2l.Module):  #@save
+    """The RNN model implemented with high-level APIs."""
     def __init__(self, num_inputs, num_hiddens):
         super().__init__()
         self.save_hyperparameters()
@@ -94,6 +109,7 @@ class RNN(d2l.Module):  #@save
 ```{.python .input}
 %%tab tensorflow
 class RNN(d2l.Module):  #@save
+    """The RNN model implemented with high-level APIs."""
     def __init__(self, num_hiddens):
         super().__init__()
         self.save_hyperparameters()            
@@ -106,27 +122,66 @@ class RNN(d2l.Module):  #@save
         return outputs, H
 ```
 
+```{.python .input}
+%%tab jax
+class RNN(nn.Module):  #@save
+    """The RNN model implemented with high-level APIs."""
+    num_hiddens: int
+
+    @nn.compact
+    def __call__(self, inputs, H=None):
+        raise NotImplementedError
+```
+
 Inheriting from the `RNNLMScratch` class in :numref:`sec_rnn-scratch`, 
 the following `RNNLM` class defines a complete RNN-based language model.
 Note that we need to create a separate fully connected output layer.
 
 ```{.python .input}
-%%tab all
+%%tab pytorch
 class RNNLM(d2l.RNNLMScratch):  #@save
+    """The RNN-based language model implemented with high-level APIs."""
+    def init_params(self):
+        self.linear = nn.LazyLinear(self.vocab_size)
+        
+    def output_layer(self, hiddens):
+        return d2l.swapaxes(self.linear(hiddens), 0, 1)
+```
+
+```{.python .input}
+%%tab mxnet, tensorflow
+class RNNLM(d2l.RNNLMScratch):  #@save
+    """The RNN-based language model implemented with high-level APIs."""
     def init_params(self):
         if tab.selected('mxnet'):
             self.linear = nn.Dense(self.vocab_size, flatten=False)
             self.initialize()
-        if tab.selected('pytorch'):
-            self.linear = nn.LazyLinear(self.vocab_size)
         if tab.selected('tensorflow'):
             self.linear = tf.keras.layers.Dense(self.vocab_size)
         
     def output_layer(self, hiddens):
-        if tab.selected('mxnet', 'pytorch'):
+        if tab.selected('mxnet'):
             return d2l.swapaxes(self.linear(hiddens), 0, 1)        
         if tab.selected('tensorflow'):
             return d2l.transpose(self.linear(hiddens), (1, 0, 2))
+```
+
+```{.python .input}
+%%tab jax
+class RNNLM(d2l.RNNLMScratch):  #@save
+    """The RNN-based language model implemented with high-level APIs."""
+    training: bool = True
+
+    def setup(self):
+        self.linear = nn.Dense(self.vocab_size)
+
+    def output_layer(self, hiddens):
+        return d2l.swapaxes(self.linear(hiddens), 0, 1)
+
+    def forward(self, X, state=None):
+        embs = self.one_hot(X)
+        rnn_outputs, _ = self.rnn(embs, state, self.training)
+        return self.output_layer(rnn_outputs)
 ```
 
 ## Training and Predicting
@@ -137,7 +192,7 @@ Given that we have not trained the network,
 it will generate nonsensical predictions.
 
 ```{.python .input}
-%%tab all
+%%tab pytorch, mxnet, tensorflow
 data = d2l.TimeMachine(batch_size=1024, num_steps=32)
 if tab.selected('mxnet', 'tensorflow'):
     rnn = RNN(num_hiddens=32)
@@ -150,7 +205,7 @@ model.predict('it has', 20, data.vocab)
 Next, we [**train our model, leveraging the high-level API**].
 
 ```{.python .input}
-%%tab all
+%%tab pytorch, mxnet, tensorflow
 if tab.selected('mxnet', 'pytorch'):
     trainer = d2l.Trainer(max_epochs=100, gradient_clip_val=1, num_gpus=1)
 if tab.selected('tensorflow'):

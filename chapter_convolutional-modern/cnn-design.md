@@ -1,6 +1,6 @@
-```{.python .input  n=1}
+```{.python .input}
 %load_ext d2lbook.tab
-tab.interact_select(['mxnet', 'pytorch', 'tensorflow'])
+tab.interact_select(['mxnet', 'pytorch', 'tensorflow', 'jax'])
 ```
 
 # Designing Convolution Network Architectures
@@ -32,6 +32,35 @@ is a single network instance. EfficientNets are a notable outcome of this search
 
 In the following we discuss an idea that is quite different to the quest for the *single best network*. It is computationally relatively inexpensive, it leads to scientific insights on the way, and it is quite effective in terms of the quality of outcomes. Let's review the strategy by :citet:`Radosavovic.Kosaraju.Girshick.ea.2020` to *design network design spaces*. The strategy combines the strength of manual design and NAS. It accomplishes this by operating on *distributions of networks* and optimizing the distributions in a way to obtain good performance for entire families of networks. The outcome of it are *RegNets*, specifically RegNetX and RegNetY, plus a range of guiding principles for the design of performant CNNs. 
 
+```{.python .input}
+%%tab mxnet
+from d2l import mxnet as d2l
+from mxnet import np, npx, init
+from mxnet.gluon import nn
+
+npx.set_np()
+```
+
+```{.python .input}
+%%tab pytorch
+from d2l import torch as d2l
+import torch
+from torch import nn
+from torch.nn import functional as F
+```
+
+```{.python .input}
+%%tab tensorflow
+import tensorflow as tf
+from d2l import tensorflow as d2l
+```
+
+```{.python .input}
+%%tab jax
+from d2l import jax as d2l
+from flax import linen as nn
+```
+
 ## The AnyNet Design Space
 :label:`subsec_the-anynet-design-space`
 
@@ -53,13 +82,8 @@ As such, with bottleneck ratio $k_i \geq 1$ we afford some number of channels $c
 This seemingly generic design space provides us nonetheless with many parameters: we can set the block width (number of channels) $c_0, \ldots c_4$, the depth (number of blocks) per stage $d_1, \ldots d_4$, the bottleneck ratios $k_1, \ldots k_4$, and the group widths (numbers of groups) $g_1, \ldots g_4$. 
 In total this adds up to 17 parameters, resulting in an unreasonably large number of configurations that would warrant exploring. We need some tools to reduce this huge design space effectively. This is where the conceptual beauty of design spaces comes in. Before we do so, let's implement the generic design first.
 
-```{.python .input  n=2}
+```{.python .input}
 %%tab mxnet
-from d2l import mxnet as d2l
-from mxnet import np, npx, init
-from mxnet.gluon import nn
-npx.set_np()
-
 class AnyNet(d2l.Classifier):
     def stem(self, num_channels):
         net = nn.Sequential()
@@ -68,13 +92,8 @@ class AnyNet(d2l.Classifier):
         return net
 ```
 
-```{.python .input  n=3}
+```{.python .input}
 %%tab pytorch
-from d2l import torch as d2l
-import torch
-from torch import nn
-from torch.nn import functional as F
-
 class AnyNet(d2l.Classifier):
     def stem(self, num_channels):
         return nn.Sequential(
@@ -82,11 +101,8 @@ class AnyNet(d2l.Classifier):
             nn.LazyBatchNorm2d(), nn.ReLU())
 ```
 
-```{.python .input  n=4}
+```{.python .input}
 %%tab tensorflow
-import tensorflow as tf
-from d2l import tensorflow as d2l
-
 class AnyNet(d2l.Classifier):
     def stem(self, num_channels):
         return tf.keras.models.Sequential([
@@ -96,11 +112,32 @@ class AnyNet(d2l.Classifier):
             tf.keras.layers.Activation('relu')])
 ```
 
+```{.python .input}
+%%tab jax
+class AnyNet(d2l.Classifier):
+    arch: tuple
+    stem_channels: int
+    lr: float = 0.1
+    num_classes: int = 10
+    training: bool = True
+
+    def setup(self):
+        self.net = self.create_net()
+
+    def stem(self, num_channels):
+        return nn.Sequential([
+            nn.Conv(num_channels, kernel_size=(3, 3), strides=(2, 2),
+                    padding=(1, 1)),
+            nn.BatchNorm(not self.training),
+            nn.relu
+        ])
+```
+
 Each stage consists of `depth` ResNeXt blocks,
 where `num_channels` specifies the block width.
 Note that the first block halves the height and width of input images.
 
-```{.python .input  n=5}
+```{.python .input}
 %%tab mxnet
 @d2l.add_to_class(AnyNet)
 def stage(self, depth, num_channels, groups, bot_mul):
@@ -115,7 +152,7 @@ def stage(self, depth, num_channels, groups, bot_mul):
     return net
 ```
 
-```{.python .input  n=6}
+```{.python .input}
 %%tab pytorch
 @d2l.add_to_class(AnyNet)
 def stage(self, depth, num_channels, groups, bot_mul):
@@ -129,7 +166,7 @@ def stage(self, depth, num_channels, groups, bot_mul):
     return nn.Sequential(*blk)
 ```
 
-```{.python .input  n=7}
+```{.python .input}
 %%tab tensorflow
 @d2l.add_to_class(AnyNet)
 def stage(self, depth, num_channels, groups, bot_mul):
@@ -143,11 +180,26 @@ def stage(self, depth, num_channels, groups, bot_mul):
     return net
 ```
 
+```{.python .input}
+%%tab jax
+@d2l.add_to_class(AnyNet)
+def stage(self, depth, num_channels, groups, bot_mul):
+    blk = []
+    for i in range(depth):
+        if i == 0:
+            blk.append(d2l.ResNeXtBlock(num_channels, groups, bot_mul,
+                use_1x1conv=True, strides=(2, 2), training=self.training))
+        else:
+            blk.append(d2l.ResNeXtBlock(num_channels, groups, bot_mul,
+                                        training=self.training))
+    return nn.Sequential(blk)
+```
+
 Putting the network stem, body, and head together,
 we complete the implementation of AnyNet.
 
-```{.python .input  n=8}
-%%tab all
+```{.python .input}
+%%tab pytorch, mxnet, tensorflow
 @d2l.add_to_class(AnyNet)
 def __init__(self, arch, stem_channels, lr=0.1, num_classes=10):
     super(AnyNet, self).__init__()
@@ -176,10 +228,25 @@ def __init__(self, arch, stem_channels, lr=0.1, num_classes=10):
             tf.keras.layers.Dense(units=num_classes)]))
 ```
 
+```{.python .input}
+%%tab jax
+@d2l.add_to_class(AnyNet)
+def create_net(self):
+    net = nn.Sequential([self.stem(self.stem_channels)])
+    for i, s in enumerate(self.arch):
+        net.layers.extend([self.stage(*s)])
+    net.layers.extend([nn.Sequential([
+        lambda x: nn.avg_pool(x, window_shape=x.shape[1:3],
+                            strides=x.shape[1:3], padding='valid'),
+        lambda x: x.reshape((x.shape[0], -1)),
+        nn.Dense(self.num_classes)])])
+    return net
+```
+
 ## Distributions and Parameters of Design Spaces
 
 As just discussed in :numref:`subsec_the-anynet-design-space`, parameters of a design space are hyperparameters of networks in that design space.
-Consider the problem of identifying good parameters in the AnyNet design space. We could try finding the *single best* parameter choice for a given amount of computation (e.g., FLOPs and compute time). If we allowed for even only *two* possible choices for each parameter, we would have to explore $2^{17} = 131072$ combinations to find the best solution. This is clearly infeasible due to its exorbitant cost. Even worse, we don't really learn anything from this exercise in terms of how one should design a network. Next time we add, say, an X-stage, or a shift operation, or similar, we would need to start from scratch. Even worse, due to the stochasticity in training (rounding, shuffling, bit errors), no two runs are likely to produce exactly the same results. A better strategy is to try to determine general guidelines of how the choices of parameters should be related. For instance, the bottleneck ratio, the number of channels, blocks, groups, or their change between layers should ideally be governed by a collection of simple rules. The approach in :citet:`radosavovic2019network` relies on the following four assumptions:
+Consider the problem of identifying good parameters in the AnyNet design space. We could try finding the *single best* parameter choice for a given amount of computation (e.g., FLOPs and compute time). If we allowed for even only *two* possible choices for each parameter, we would have to explore $2^{17} = 131072$ combinations to find the best solution. This is clearly infeasible due to its exorbitant cost. Even worse, we do not really learn anything from this exercise in terms of how one should design a network. Next time we add, say, an X-stage, or a shift operation, or similar, we would need to start from scratch. Even worse, due to the stochasticity in training (rounding, shuffling, bit errors), no two runs are likely to produce exactly the same results. A better strategy is to try to determine general guidelines of how the choices of parameters should be related. For instance, the bottleneck ratio, the number of channels, blocks, groups, or their change between layers should ideally be governed by a collection of simple rules. The approach in :citet:`radosavovic2019network` relies on the following four assumptions:
 
 1. We assume that general design principles actually exist, such that many networks satisfying these requirements should offer good performance. Consequently, identifying a *distribution* over networks can be a good strategy. In other words, we assume that there are many good needles in the haystack.
 1. We need not train networks to convergence before we can assess whether a network is good. Instead, it is sufficient to use the intermediate results as reliable guidance for final accuracy. Using (approximate) proxies to optimize an objective is referred to as multi-fidelity optimization :cite:`forrester2007multi`. Consequently, design optimization is carried out, based on the accuracy achieved after only a few passes through the dataset, reducing the cost significantly. 
@@ -195,8 +262,8 @@ Our goal is now to find a distribution $p$ over *networks* such that most networ
 $$\hat{F}(e, \mathcal{Z}) = \frac{1}{n}\sum_{i=1}^n \mathbf{1}(e_i \leq e).$$
 
 Whenever the CDF for one set of choices majorizes (or matches) another CDF it follows that its choice of parameters is superior (or indifferent). Accordingly 
-:citet:`Radosavovic.Kosaraju.Girshick.ea.2020` experimented with a shared network bottleneck ratio $k_i = k$ for all stages $i$ of the network. This gets rid of $3$ of the $4$ parameters governing the bottleneck ratio. To assess whether this (negatively) affects the performance one can draw networks from the constrained and from the unconstrained distribution and compare the corresonding CDFs. It turns out that this constraint doesn't affect accuracy of the distribution of networks at all, as can be seen in the first panel of :numref:`fig_regnet-fig`. 
-Likewise, we could choose to pick the same group width $g_i = g$ occurring at the various stages of the network. Again, this doesn't affect performance, as can be seen in the second panel of :numref:`fig_regnet-fig`.
+:citet:`Radosavovic.Kosaraju.Girshick.ea.2020` experimented with a shared network bottleneck ratio $k_i = k$ for all stages $i$ of the network. This gets rid of $3$ of the $4$ parameters governing the bottleneck ratio. To assess whether this (negatively) affects the performance one can draw networks from the constrained and from the unconstrained distribution and compare the corresonding CDFs. It turns out that this constraint does not affect accuracy of the distribution of networks at all, as can be seen in the first panel of :numref:`fig_regnet-fig`. 
+Likewise, we could choose to pick the same group width $g_i = g$ occurring at the various stages of the network. Again, this does not affect performance, as can be seen in the second panel of :numref:`fig_regnet-fig`.
 Both steps combined reduce the number of free parameters by $6$. 
 
 ![Comparing error empirical distribution functions of design spaces. $\mathrm{AnyNet}_A$ is the original design space; $\mathrm{AnyNet}_B$ ties the bottleneck ratios, $\mathrm{AnyNet}_C$ also ties group widths, $\mathrm{AnyNet}_D$ increases the network depth across stages. From left to right: (i) tying bottleneck ratios has no effect on performance, (ii) tying group widths has no effect on performance, (iii) increasing network widths (channels) across stages improves performance, (iv) increasing network depths across stages improves performance. Figure courtesy of :citet:`Radosavovic.Kosaraju.Girshick.ea.2020`.](../img/regnet-fig.png)
@@ -219,8 +286,8 @@ This leaves us with the last set of choices: how to pick the specific values for
 
 We recommend the interested reader to review further details for how to design specific networks for different amounts of computation by perusing :citet:`Radosavovic.Kosaraju.Girshick.ea.2020`. For instance, an effective 32-layer RegNetX variant is given by $k = 1$ (no bottleneck), $g = 16$ (group width is 16), $c_1 = 32$ and $c_2 = 80$ channels for the first and second stage, respectively, chosen to be $d_1=4$ and $d_2=6$ blocks deep. The astonishing insight from the design is that it applies, even when investigating networks at a larger scale. Even better, it even holds for Squeeze-and-Excitation (SE) network designs (RegNetY) that have a global channel activation :cite:`Hu.Shen.Sun.2018`.
 
-```{.python .input  n=9}
-%%tab all
+```{.python .input}
+%%tab pytorch, mxnet, tensorflow
 class RegNetX32(AnyNet):
     def __init__(self, lr=0.1, num_classes=10):
         stem_channels, groups, bot_mul = 32, 16, 1
@@ -231,31 +298,45 @@ class RegNetX32(AnyNet):
             stem_channels, lr, num_classes)
 ```
 
+```{.python .input}
+%%tab jax
+class RegNetX32(AnyNet):
+    lr: float = 0.1
+    num_classes: int = 10
+    stem_channels: int = 32
+    arch: tuple = ((4, 32, 16, 1), (6, 80, 16, 1))
+```
+
 We can see that each RegNetX stage progressively reduces resolution and increases output channels.
 
-```{.python .input  n=10}
+```{.python .input}
 %%tab mxnet, pytorch
 RegNetX32().layer_summary((1, 1, 96, 96))
 ```
 
-```{.python .input  n=11}
+```{.python .input}
 %%tab tensorflow
 RegNetX32().layer_summary((1, 96, 96, 1))
+```
+
+```{.python .input}
+%%tab jax
+RegNetX32(training=False).layer_summary((1, 96, 96, 1))
 ```
 
 ## Training
 
 Training the 32-layer RegNetX on the Fashion-MNIST dataset is just like before.
 
-```{.python .input  n=12}
-%%tab mxnet, pytorch
+```{.python .input}
+%%tab mxnet, pytorch, jax
 model = RegNetX32(lr=0.05)
 trainer = d2l.Trainer(max_epochs=10, num_gpus=1)
 data = d2l.FashionMNIST(batch_size=128, resize=(96, 96))
 trainer.fit(model, data)
 ```
 
-```{.python .input  n=13}
+```{.python .input}
 %%tab tensorflow
 trainer = d2l.Trainer(max_epochs=10)
 data = d2l.FashionMNIST(batch_size=128, resize=(96, 96))
@@ -269,7 +350,7 @@ with d2l.try_gpu():
 With desirable inductive biases (assumptions or preferences) like locality and translation invariance (:numref:`sec_why-conv`)
 for vision, CNNs have been the dominant architectures in this area. This has remained the case since LeNet up until recently when Transformers (:numref:`sec_transformer`) :cite:`Dosovitskiy.Beyer.Kolesnikov.ea.2021,touvron2021training` started surpassing CNNs in terms of accuracy. While much of the recent progress in terms of vision Transformers *can* be backported into CNNs :cite:`liu2022convnet`, it is only possible at a higher computational cost. Just as importantly, recent hardware optimizations (NVIDIA Ampere and Hopper) have only widened the gap in favor of Transformers. 
 
-It is worth noting that Transformers have a significantly lower degree of inductive bias towards locality and translation invariance than CNNs. It is not the least due to the availability of large image collections, such as LAION-400m and LAION-5B :cite:`schuhmannlaion` with up to 5 billion images that learned structures prevailed. Quite surprisingly, some of the more relevant work in this context even includes MLPs :cite:`tolstikhin2021mlp`. 
+It is worth noting that Transformers have a significantly lower degree of inductive bias towards locality and translation invariance than CNNs. It is not the least due to the availability of large image collections, such as LAION-400m and LAION-5B :cite:`schuhmann2022laion` with up to 5 billion images that learned structures prevailed. Quite surprisingly, some of the more relevant work in this context even includes MLPs :cite:`tolstikhin2021mlp`. 
 
 In sum, vision Transformers (:numref:`sec_vision-transformer`) by now lead in terms of 
 state-of-the-art performance in large-scale image classification, 
